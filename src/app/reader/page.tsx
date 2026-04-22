@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight,
   ArrowRight, BookOpen, Loader2,
   Sun, Moon, Maximize2, Minimize2, AlertTriangle, Download,
-  List, X, BookMarked
+  List, X, BookMarked, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -48,6 +48,11 @@ function ReaderContent() {
   const [tocLoading, setTocLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
+  const [textContent, setTextContent] = useState<string>('');
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryText, setSummaryText] = useState<string>('');
+  const [summaryError, setSummaryError] = useState<string>('');
 
   // Fetch book metadata and total pages on mount
   useEffect(() => {
@@ -92,6 +97,7 @@ function ReaderContent() {
 
         if (data.success && data.content) {
           setContent(data.content);
+          setTextContent(data.textContent || '');
           if (data.totalPages) setTotalPages(data.totalPages);
           if (data.metadata) setMetadata(data.metadata);
         } else {
@@ -119,6 +125,33 @@ function ReaderContent() {
     const num = parseInt(pageInput, 10);
     if (!isNaN(num)) goToPage(num);
   }, [pageInput, goToPage]);
+
+  const handleSummarize = useCallback(async () => {
+    if (!textContent.trim()) return;
+    setShowSummary(true);
+    setSummaryLoading(true);
+    setSummaryText('');
+    setSummaryError('');
+
+    try {
+      const res = await fetch('/api/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textContent, url: bookUrl }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setSummaryText(data.summary || '');
+      } else {
+        setSummaryError(data.error || 'فشل في تلخيص المحتوى');
+      }
+    } catch {
+      setSummaryError('فشل الاتصال بالخادم. حاول مرة أخرى.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [textContent, bookUrl]);
 
   // Keyboard Navigation
   useEffect(() => {
@@ -219,6 +252,12 @@ function ReaderContent() {
 
             {/* Left: Tools */}
             <div className="flex items-center gap-1 shrink-0">
+              <button onClick={handleSummarize} disabled={loading || !textContent}
+                className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
+                title="تلخيص المحتوى">
+                <Sparkles size={16} />
+              </button>
+
               <button onClick={() => setShowToc(true)} disabled={toc.length === 0}
                 className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
                 title="الفهرست">
@@ -468,6 +507,83 @@ function ReaderContent() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* === SUMMARY MODAL === */}
+      <AnimatePresence>
+        {showSummary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            onClick={() => setShowSummary(false)}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl max-h-[80vh] mx-4 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              style={{
+                backgroundColor: 'rgba(13,17,23,0.97)',
+                backdropFilter: 'blur(24px)',
+                border: '1px solid rgba(212,175,55,0.15)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                    <Sparkles size={18} className="text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <h2 className="text-gray-100 font-bold text-base">تلخيص المحتوى</h2>
+                    <p className="text-gray-500 text-[10px]">ملخص ذكي بالذكاء الاصطناعي — صفحة {currentPage}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowSummary(false)} className="p-1.5 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-4" style={{ scrollbarWidth: 'thin' }}>
+                {/* Loading */}
+                {summaryLoading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-12 flex flex-col items-center gap-3">
+                    <div className="relative">
+                      <div className="w-14 h-14 rounded-full border-2 border-[#D4AF37]/30 border-t-[#D4AF37] animate-spin" />
+                      <Sparkles size={20} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#D4AF37]" />
+                    </div>
+                    <span className="text-gray-300 text-sm font-medium">جارٍ تلخيص المحتوى...</span>
+                    <span className="text-gray-500 text-xs">يتم تحليل النص واستخراج النقاط الرئيسية</span>
+                  </motion.div>
+                )}
+
+                {/* Error */}
+                {!summaryLoading && summaryError && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                    <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                    <span className="text-red-400 text-sm">{summaryError}</span>
+                  </motion.div>
+                )}
+
+                {/* Summary Text */}
+                {!summaryLoading && summaryText && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                    <div className="rounded-xl bg-[#111827]/80 border border-[#D4AF37]/10 p-5">
+                      <div className="text-gray-300 text-sm leading-loose whitespace-pre-wrap" style={{ direction: 'rtl', textAlign: 'right', lineHeight: '2.2' }}>
+                        {summaryText}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </motion.div>
           </motion.div>

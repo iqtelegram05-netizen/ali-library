@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // ================================================================
 //  محرك استخراج كتب مكتبة الشيعة أونلاين — Regex-Based Parser
 //  يوزع صفحة فهرس الكتب ويستخرج الكتب بالتفصيل
+//  الترقيم تسلسلي بسيط — بدون تصنيف "جزء"
+//  الكتب متعددة الأجزاء تُعرَّف من الموقع المصدر
 // ================================================================
 
 const ARCHIVE_BASE = 'https://web.archive.org/web/20250105004220/http://shiaonlinelibrary.com';
@@ -78,13 +80,30 @@ async function fetchHtml(targetUrl: string): Promise<string> {
 }
 
 /**
+ * استخراج رقم الجزء من خلية الجزء في الجدول المصدر
+ * يعيد null إذا لم يكن هناك أجزاء
+ */
+function extractVolumeInfo(partText: string): string | null {
+  if (!partText) return null;
+  const trimmed = partText.trim();
+  if (!trimmed || trimmed === '-') return null;
+  // إذا كان النص يحتوي "جزء" أو رقم جزء
+  const partMatch = trimmed.match(/جزء\s*(\d+)/i) || trimmed.match(/^(\d+)\s*$/);
+  if (partMatch) {
+    return trimmed;
+  }
+  return null;
+}
+
+/**
  * توزيع صفحة فهرس الكتب واستخراج الكتب من tbody
+ * الترقيم تسلسلي بسيط — بدون تصنيف "جزء"
  */
 function parseBooksFromHtml(html: string): Array<{
   id: string;
   title: string;
   author: string;
-  part: string;
+  volume: string | null;
   url: string;
   pdfUrl: string;
 }> {
@@ -92,7 +111,7 @@ function parseBooksFromHtml(html: string): Array<{
     id: string;
     title: string;
     author: string;
-    part: string;
+    volume: string | null;
     url: string;
     pdfUrl: string;
   }> = [];
@@ -120,15 +139,12 @@ function parseBooksFromHtml(html: string): Array<{
 
     if (tds.length < 4) continue;
 
-    // td[0] = number, td[1] = title+link, td[2] = part, td[3] = author, td[4] = PDF link
+    // td[0] = number, td[1] = title+link, td[2] = part/volume (from source), td[3] = author, td[4] = PDF link
     const numberCell = tds[0] || '';
     const titleCell = tds[1] || '';
     const partCell = tds[2] || '';
     const authorCell = tds[3] || '';
     const pdfCell = tds[4] || '';
-
-    // Extract book number
-    const bookNum = cleanText(numberCell).trim();
 
     // Extract title and URL from td[1]
     const linkMatch = titleCell.match(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
@@ -141,9 +157,6 @@ function parseBooksFromHtml(html: string): Array<{
 
     if (!title || title.length < 2) continue;
 
-    // Extract part
-    const part = cleanText(partCell).trim();
-
     // Extract author from td[3]
     const authorLinkMatch = authorCell.match(/<a[^>]*>([\s\S]*?)<\/a>/i);
     let author = '';
@@ -153,6 +166,10 @@ function parseBooksFromHtml(html: string): Array<{
     if (!author) {
       author = cleanText(authorCell).replace(/^&nbsp;/, '').trim();
     }
+
+    // Extract volume info from source (part cell) — بدون تصنيف "جزء"
+    const rawPart = cleanText(partCell).trim();
+    const volume = extractVolumeInfo(rawPart);
 
     // Extract PDF URL from td[4]
     let pdfUrl = '';
@@ -166,7 +183,6 @@ function parseBooksFromHtml(html: string): Array<{
       if (bookUrl.startsWith('/web/')) {
         bookUrl = `https://web.archive.org${bookUrl}`;
       } else if (bookUrl.startsWith('/')) {
-        // Root-relative URL (e.g., /الكتب/1_القرآن) — prepend Wayback path
         bookUrl = `${ARCHIVE_BASE}${bookUrl}`;
       } else {
         bookUrl = `${ARCHIVE_BASE}/${bookUrl}`;
@@ -184,14 +200,16 @@ function parseBooksFromHtml(html: string): Array<{
     }
 
     // Validate URL: must contain a book identifier (number_prefix pattern)
-    // Skip URLs that don't point to a specific book
     if (!bookUrl || (!/\d+_/.test(bookUrl) && !bookUrl.includes('shiaonlinelibrary'))) continue;
 
+    // ترقيم تسلسلي بسيط
+    const seqNum = books.length + 1;
+
     books.push({
-      id: bookNum || `bk-${books.length + 1}`,
+      id: String(seqNum),
       title,
       author,
-      part,
+      volume,
       url: bookUrl,
       pdfUrl,
     });
@@ -209,7 +227,6 @@ function extractTotalPages(html: string): number {
   if (!pagerMatch) return 1;
 
   const pagerContent = pagerMatch[1];
-  // Find all page numbers
   const pageLinks = pagerContent.matchAll(/الصفحة_(\d+)/g);
   let maxPage = 1;
   for (const match of pageLinks) {
@@ -217,7 +234,6 @@ function extractTotalPages(html: string): number {
     if (num > maxPage) maxPage = num;
   }
 
-  // Also check for direct links to الصفحة_N in the page links
   const directPageLinks = pagerContent.matchAll(/class="page"[^>]*>(\d+)/g);
   for (const match of directPageLinks) {
     const num = parseInt(match[1], 10);
@@ -277,12 +293,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Map to response format
-    const result = allBooks.map((b) => ({
+    // Map to response format — ترقيم تسلسلي بسيط بدون تصنيف "جزء"
+    const result = allBooks.map((b, index) => ({
       id: b.id,
+      seq: index + 1,
       title: b.title,
       author: b.author,
-      part: b.part,
+      volume: b.volume,  // معلومة الجزء من المصدر فقط (وليس تصنيفاً)
       url: b.url,
       pdfUrl: b.pdfUrl,
       selected: true,

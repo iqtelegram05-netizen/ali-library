@@ -300,10 +300,14 @@ export async function POST(req: NextRequest) {
       }, { status: 200 });
     }
 
+    // Extract plain text content for DeepSeek summarization
+    const textContent = cleanText(content);
+
     return NextResponse.json({
       success: true,
       action: 'content',
       content,  // Raw HTML content from the page
+      textContent,  // Plain text (for AI summarization)
       metadata,
       totalPages,
       currentPage: page,
