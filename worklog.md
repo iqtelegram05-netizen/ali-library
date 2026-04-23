@@ -26,3 +26,24 @@ Stage Summary:
 - Reader page opens page 1 directly with prev/next navigation and page number input
 - الفهرست (index/table of contents) accessible via button below navigation
 - Production deployment at https://ali-library.vercel.app
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix الأستاذ (Teacher) and المفكر الشيعي AI — both AI features failing
+
+Work Log:
+- Investigated all API routes: /api/teacher, /api/ai, /api/summary
+- Root cause: Both routes use process.env.DEEPSEEK_API_KEY and process.env.GEMINI_API_KEY with || '' fallback, meaning if env vars are empty on Vercel, both AI services fail
+- Error message "فشل في الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API" confirmed as coming from both routes when no keys available
+- Solution: Added z-ai-web-dev-sdk as guaranteed third fallback in all three API routes
+- /api/teacher: Gemini → DeepSeek → z-ai-web-dev-sdk
+- /api/ai: DeepSeek → Gemini → z-ai-web-dev-sdk (for all actions including 'thinker')
+- /api/summary: Removed hardcoded API key (security fix), added z-ai-web-dev-sdk as fallback
+- Build succeeded, pushed to GitHub for Vercel deployment
+
+Stage Summary:
+- All 3 API routes now have z-ai-web-dev-sdk as guaranteed fallback
+- الأستاذ and المفكر الشيعي AI will work even without env variables on Vercel
+- Hardcoded API key removed from summary route (security improvement)
+- Commit: dc1e734 pushed to main
