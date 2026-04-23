@@ -812,7 +812,7 @@ function FetchEngineSection({ books, setBooks }: { books: BookItem[]; setBooks: 
               )}
             </AnimatePresence>
 
-            {/* Scrape progress — Gemini analyzing */}
+            {/* Scrape progress — AI analyzing */}
             {scraping && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-8 flex flex-col items-center gap-3">
                 <div className="relative">
@@ -827,7 +827,7 @@ function FetchEngineSection({ books, setBooks }: { books: BookItem[]; setBooks: 
               </motion.div>
             )}
 
-            {/* Scrape Results — Gemini Powered */}
+            {/* Scrape Results — AI Powered */}
             <AnimatePresence>
               {showScrapeResults && scrapedPdfs.length > 0 && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4">
@@ -1323,14 +1323,12 @@ function ThinkerSection() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [cooldownSec, setCooldownSec] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const cooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || loading || cooldownSec > 0) return;
+    if (!input.trim() || loading) return;
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
     setMessages(prev => [...prev, userMsg]); setInput(''); setLoading(true);
     try {
@@ -1344,20 +1342,6 @@ function ThinkerSection() {
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.result }]);
       } else {
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.error || 'حدث خطأ' }]);
-        // عداد تنازلي عند تجاوز الحصة
-        if (data.retryAfter && data.retryAfter > 0) {
-          setCooldownSec(data.retryAfter);
-          if (cooldownTimer.current) clearInterval(cooldownTimer.current);
-          cooldownTimer.current = setInterval(() => {
-            setCooldownSec(prev => {
-              if (prev <= 1) {
-                if (cooldownTimer.current) clearInterval(cooldownTimer.current);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
-        }
       }
     } catch (e: any) {
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: `خطأ في الاتصال: ${e.message}` }]);
@@ -1414,8 +1398,8 @@ function ThinkerSection() {
               <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="اكتب سؤالك العقائدي أو الفلسفي هنا..."
                 className="flex-1 px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all resize-none leading-relaxed" rows={1} style={{ minHeight: '44px', maxHeight: '120px' }} />
-              <button onClick={handleSend} disabled={loading || !input.trim() || cooldownSec > 0} className="btn-green p-3 rounded-xl text-white disabled:opacity-50 transition-all shrink-0">
-                {cooldownSec > 0 ? <span className="text-xs font-mono">{cooldownSec}s</span> : <Send size={18} />}
+              <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-green p-3 rounded-xl text-white disabled:opacity-50 transition-all shrink-0">
+                <Send size={18} />
               </button>
             </div>
           </div>

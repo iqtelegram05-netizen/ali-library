@@ -1,67 +1,120 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================================
-//  AI Router — بدون أي قيود أو انتظار
-//  المفكر الشيعي + التدقيق + البحث → Gemini (مكتبة رسمية)
-//  الأستاذ (الملخص) → DeepSeek
-//  إظهار الخطأ الحقيقي من السيرفر
+//  AI Router — نظام التدوير الذكي (Key Rotation)
+//  3 مفاتيح DeepSeek تعمل بالتناوب مع انتقال تلقائي عند الفشل
+//  بدون أي انتظار أو تأخير — اتصال مباشر وسريع
 // ================================================================
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
+const DEEPSEEK_MODEL = 'deepseek-chat';
 
-async function callDeepSeek(apiKey: string, messages: Array<{role: string; content: string}>, temperature: number = 0.3, maxTokens: number = 4000): Promise<string> {
+// مؤشر التدوير — يتغير مع كل طلب تلقائياً
+let keyIndex = 0;
+
+// جلب مصفوفة المفاتيح من Vercel Env
+function getKeys(): string[] {
+  const k1 = (process.env.DEEPSEEK_KEY_1 || '').trim();
+  const k2 = (process.env.DEEPSEEK_KEY_2 || '').trim();
+  const k3 = (process.env.DEEPSEEK_KEY_3 || '').trim();
+  return [k1, k2, k3].filter(k => k.length > 0);
+}
+
+// اختيار المفتاح التالي بالتناوب (Round-Robin)
+function getNextKey(): string | null {
+  const keys = getKeys();
+  if (keys.length === 0) return null;
+  keyIndex = keyIndex % keys.length;
+  const key = keys[keyIndex];
+  keyIndex++;
+  return key;
+}
+
+// استدعاء DeepSeek بمفتاح محدد
+async function callDeepSeekWithKey(
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  temperature: number = 0.7,
+  maxTokens: number = 4096
+): Promise<string> {
   const res = await fetch(DEEPSEEK_BASE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: 'deepseek-chat', messages, temperature, max_tokens: maxTokens }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
     signal: AbortSignal.timeout(90000),
   });
+
   if (!res.ok) {
-    const e = await res.text().catch(() => '');
-    throw new Error(`DeepSeek HTTP ${res.status}: ${e.slice(0, 500)}`);
+    const errorBody = await res.text().catch(() => '');
+    throw new Error(`DeepSeek HTTP ${res.status}: ${errorBody.slice(0, 500)}`);
   }
-  const d = await res.json();
-  return d?.choices?.[0]?.message?.content || '';
+
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content || '';
 }
 
-async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4096): Promise<string> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    systemInstruction: systemPrompt,
-    generationConfig: { temperature, maxOutputTokens: maxTokens },
-  });
-  const result = await model.generateContent(userMessage);
-  const response = result.response;
-  return response.text();
-}
+// استدعاء ذكي مع تدوير المفاتيح — ينتقل للمفتاح التالي تلقائياً عند الفشل
+async function callDeepSeekSmart(
+  messages: Array<{ role: string; content: string }>,
+  temperature: number = 0.7,
+  maxTokens: number = 4096
+): Promise<{ result: string; keyUsed: string }> {
+  const keys = getKeys();
+  if (keys.length === 0) {
+    throw new Error('لا توجد مفاتيح DeepSeek. تأكد من إضافة DEEPSEEK_KEY_1 في متغيرات Vercel');
+  }
 
-// استخراج وقت إعادة المحاولة من خطأ 429
-function extractRetrySeconds(error: any): number {
-  const msg = error?.message || String(error);
-  // البحث عن "retry in Xs" أو "retryDelay":"Xs"
-  const match1 = msg.match(/retry\s+in\s+([\d.]+)s/i);
-  if (match1) return Math.ceil(parseFloat(match1[1]));
-  const match2 = msg.match(/"retryDelay"\s*:\s*"(\d+)s"/);
-  if (match2) return parseInt(match2[1]);
-  const match3 = msg.match(/Please retry in ([\d.]+)s/);
-  if (match3) return Math.ceil(parseFloat(match3[1]));
-  return 15; // افتراضي
+  // حفظ مؤشر البداية لمنع الحلقة اللانهائية
+  const startIndex = keyIndex % keys.length;
+  let currentKey = getNextKey();
+  let attempts = 0;
+
+  while (attempts < keys.length) {
+    try {
+      const result = await callDeepSeekWithKey(currentKey!, messages, temperature, maxTokens);
+      return { result, keyUsed: `KEY_${(keyIndex + attempts) % keys.length + 1}` };
+    } catch (error: any) {
+      const errMsg = error?.message || '';
+      console.error(`[Key Rotation] المفتاح ${(keyIndex + attempts) % keys.length + 1} فشل: ${errMsg.slice(0, 200)}`);
+
+      // إذا كان الخطأ 401 (مفتاح غير صالح) أو 429 (تجاوز الحصة)، انتقل للمفتاح التالي
+      if (errMsg.includes('401') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('rate')) {
+        currentKey = getNextKey();
+        attempts++;
+        if (attempts < keys.length) {
+          console.log(`[Key Rotation] الانتقال للمفتاح التالي... (محاولة ${attempts + 1}/${keys.length})`);
+        }
+      } else {
+        // أخطاء أخرى (شبكة، timeout) — أعد المحاولة بالمفتاح التالي أيضاً
+        currentKey = getNextKey();
+        attempts++;
+        if (attempts < keys.length) {
+          console.log(`[Key Rotation] خطأ شبكة، الانتقال للمفتاح التالي... (محاولة ${attempts + 1}/${keys.length})`);
+        }
+      }
+    }
+  }
+
+  throw new Error(`جميع المفاتيح (${keys.length}) فشلت. حاول لاحقاً.`);
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const DEEPSEEK_API_KEY = (process.env.DEEPSEEK_API_KEY || '').trim();
-    const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
-
     const body = await req.json();
     const { action, content, messages } = body;
 
     let systemPrompt = '';
     let userContent = '';
-    let temperature = 0.3;
-    let maxTokens = 4000;
+    let temperature = 0.7;
+    let maxTokens = 4096;
 
     switch (action) {
       case 'thinker':
@@ -96,6 +149,8 @@ export async function POST(req: NextRequest) {
 - لغتك عربية فصيحة واضحة ومنظمة
 - إذا كان النص فارغاً أو قصيراً، قل فقط: النص غير كافٍ للتلخيص`;
         userContent = content;
+        temperature = 0.3;
+        maxTokens = 4000;
         break;
 
       case 'validate':
@@ -109,6 +164,7 @@ export async function POST(req: NextRequest) {
 7. تقديم بدائل أكثر قوة للادعاءات الضعيفة
 أجب باللغة العربية بطريقة أكاديمية مهنية.`;
         userContent = content;
+        temperature = 0.5;
         break;
 
       case 'search':
@@ -120,6 +176,7 @@ export async function POST(req: NextRequest) {
 4. اقتراح مصادر ومراجع ذات صلة
 5. تنظيم النتائج في تصنيفات واضحة`;
         userContent = content;
+        temperature = 0.5;
         break;
 
       case 'categorize':
@@ -135,94 +192,49 @@ export async function POST(req: NextRequest) {
     }
 
     // ================================================================
-    //  المفكر الشيعي → Gemini فقط (مكتبة رسمية @google/generative-ai)
+    //  بناء الرسائل
     // ================================================================
-    if (action === 'thinker') {
-      if (!GEMINI_API_KEY) {
-        return NextResponse.json({ success: false, error: 'GEMINI_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
-      }
-      try {
-        let promptText = userContent;
-        if (Array.isArray(messages) && messages.length > 0) {
-          const history = messages.map(m => `${m.role === 'user' ? 'المستخدم' : 'المفكر الشيعي'}: ${m.content}`).join('\n\n');
-          promptText = `التاريخ الحواري السابق:\n${history}\n\nالسؤال الأخير: ${content}`;
+    const apiMessages: Array<{ role: string; content: string }> = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // إضافة التاريخ الحواري للمفكر الشيعي
+    if (action === 'thinker' && Array.isArray(messages) && messages.length > 0) {
+      const history = messages.map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+      apiMessages.push(...history);
+    }
+
+    apiMessages.push({ role: 'user', content: userContent });
+
+    // ================================================================
+    //  الاستدعاء الذكي مع التدوير
+    // ================================================================
+    try {
+      const { result, keyUsed } = await callDeepSeekSmart(apiMessages, temperature, maxTokens);
+
+      if (action === 'categorize') {
+        const jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return NextResponse.json({
+            success: true,
+            result: JSON.parse(jsonMatch[0]),
+            keyUsed,
+          });
         }
-        const result = await callGemini(GEMINI_API_KEY, systemPrompt, promptText, temperature, maxTokens);
-        return NextResponse.json({ success: true, result });
-      } catch (e: any) {
-        const is429 = (e?.message || '').includes('429') || (e?.message || '').includes('quota');
-        const retryAfter = is429 ? extractRetrySeconds(e) : 0;
-        console.error('Thinker (Gemini) error:', e);
-        return NextResponse.json({
-          success: false,
-          error: is429 ? `وصلت للحصة المجانية. يرجى الانتظار ${retryAfter} ثانية ثم حاول مرة أخرى.` : `خطأ Gemini: ${e.message}`,
-          retryAfter,
-          quotaExceeded: is429,
-        }, { status: 429 });
+        return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 }, keyUsed });
       }
-    }
 
-    // ================================================================
-    //  الأستاذ (الملخص) → DeepSeek فقط
-    // ================================================================
-    if (action === 'summarize') {
-      if (!DEEPSEEK_API_KEY) {
-        return NextResponse.json({ success: false, error: 'DEEPSEEK_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
-      }
-      try {
-        const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
-        return NextResponse.json({ success: true, result });
-      } catch (e: any) {
-        console.error('Summarize (DeepSeek) error:', e);
-        return NextResponse.json({ success: false, error: `خطأ DeepSeek: ${e.message}` });
-      }
+      return NextResponse.json({ success: true, result, keyUsed });
+    } catch (e: any) {
+      console.error(`[${action}] جميع المفاتيح فشلت:`, e.message);
+      return NextResponse.json({
+        success: false,
+        error: e.message,
+      });
     }
-
-    // ================================================================
-    //  تدقيق البحث + البحث → Gemini (مكتبة رسمية)
-    // ================================================================
-    if (action === 'validate' || action === 'search') {
-      if (!GEMINI_API_KEY) {
-        return NextResponse.json({ success: false, error: 'GEMINI_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
-      }
-      try {
-        const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
-        return NextResponse.json({ success: true, result });
-      } catch (e: any) {
-        const is429 = (e?.message || '').includes('429') || (e?.message || '').includes('quota');
-        const retryAfter = is429 ? extractRetrySeconds(e) : 0;
-        console.error(`${action} (Gemini) error:`, e);
-        return NextResponse.json({
-          success: false,
-          error: is429 ? `وصلت للحصة المجانية. يرجى الانتظار ${retryAfter} ثانية ثم حاول مرة أخرى.` : `خطأ Gemini: ${e.message}`,
-          retryAfter,
-          quotaExceeded: is429,
-        }, { status: 429 });
-      }
-    }
-
-    // ================================================================
-    //  التصنيف → DeepSeek أولاً ثم Gemini
-    // ================================================================
-    if (action === 'categorize') {
-      if (DEEPSEEK_API_KEY) {
-        try {
-          const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
-          const jsonMatch = result.match(/\{[\s\S]*\}/);
-          if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
-        } catch (e: any) { console.error('categorize DeepSeek:', e); }
-      }
-      if (GEMINI_API_KEY) {
-        try {
-          const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
-          const jsonMatch = result.match(/\{[\s\S]*\}/);
-          if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
-        } catch (e: any) { console.error('categorize Gemini:', e); }
-      }
-      return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 } });
-    }
-
-    return NextResponse.json({ success: false, error: `طلب غير معروف: ${action}` }, { status: 400 });
   } catch (error: any) {
     console.error('AI API fatal:', error);
     return NextResponse.json({ success: false, error: `خطأ داخلي: ${error.message}` });
