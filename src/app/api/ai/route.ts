@@ -1,30 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================================
-//  AI Router
-//  المفكر الشيعي → Gemini فقط
-//  الأستاذ/التدقيق/البحث → DeepSeek فقط
-//  بدون z-ai-web-dev-sdk — مفاتيح Vercel فقط
-//  حد أقصى: طلب واحد كل 3 ثوانٍ لمنع 429
+//  AI Router — بدون أي قيود أو انتظار
+//  المفكر الشيعي + التدقيق + البحث → Gemini (مكتبة رسمية)
+//  الأستاذ (الملخص) → DeepSeek
+//  إظهار الخطأ الحقيقي من السيرفر
 // ================================================================
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-// === حد أقصى طلب واحد كل 3 ثوانٍ ===
-const lastRequest: Record<string, number> = {};
-const COOLDOWN_MS = 3000;
-
-function checkCooldown(identifier: string): string | null {
-  const now = Date.now();
-  const last = lastRequest[identifier] || 0;
-  if (now - last < COOLDOWN_MS) {
-    const waitSec = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
-    return `يرجى المحاولة بعد ${waitSec} ثوانٍ، النظام قيد المعالجة`;
-  }
-  lastRequest[identifier] = now;
-  return null;
-}
 
 async function callDeepSeek(apiKey: string, messages: Array<{role: string; content: string}>, temperature: number = 0.3, maxTokens: number = 4000): Promise<string> {
   const res = await fetch(DEEPSEEK_BASE_URL, {
@@ -33,35 +17,24 @@ async function callDeepSeek(apiKey: string, messages: Array<{role: string; conte
     body: JSON.stringify({ model: 'deepseek-chat', messages, temperature, max_tokens: maxTokens }),
     signal: AbortSignal.timeout(90000),
   });
-  if (res.status === 429) throw new Error('يرجى المحاولة بعد لحظات، النظام قيد المعالجة');
   if (!res.ok) {
     const e = await res.text().catch(() => '');
-    console.error('DeepSeek error:', res.status, e.slice(0, 200));
-    throw new Error('يرجى المحاولة بعد لحظات، النظام قيد المعالجة');
+    throw new Error(`DeepSeek HTTP ${res.status}: ${e.slice(0, 500)}`);
   }
   const d = await res.json();
   return d?.choices?.[0]?.message?.content || '';
 }
 
 async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4096): Promise<string> {
-  const res = await fetch(`${GEMINI_BASE_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ parts: [{ text: userMessage }] }],
-      generationConfig: { temperature, maxOutputTokens: maxTokens },
-    }),
-    signal: AbortSignal.timeout(90000),
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: systemPrompt,
+    generationConfig: { temperature, maxOutputTokens: maxTokens },
   });
-  if (res.status === 429) throw new Error('يرجى المحاولة بعد لحظات، النظام قيد المعالجة');
-  if (!res.ok) {
-    const e = await res.text().catch(() => '');
-    console.error('Gemini error:', res.status, e.slice(0, 200));
-    throw new Error('يرجى المحاولة بعد لحظات، النظام قيد المعالجة');
-  }
-  const d = await res.json();
-  return d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const result = await model.generateContent(userMessage);
+  const response = result.response;
+  return response.text();
 }
 
 export async function POST(req: NextRequest) {
@@ -71,20 +44,6 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { action, content, messages } = body;
-    if (!action) return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 400 });
-
-    // === منع الطلبات الفارغة ===
-    const userText = (typeof content === 'string' ? content : '').trim();
-    if (!userText && action !== 'categorize') {
-      return NextResponse.json({ error: 'يرجى كتابة نص أو سؤال قبل الإرسال' }, { status: 400 });
-    }
-
-    // === فاصل زمني 3 ثوانٍ ===
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'global';
-    const cooldownError = checkCooldown(`${action}:${ip}`);
-    if (cooldownError) {
-      return NextResponse.json({ error: cooldownError, cooldown: true }, { status: 429 });
-    }
 
     let systemPrompt = '';
     let userContent = '';
@@ -107,7 +66,7 @@ export async function POST(req: NextRequest) {
 - لغتك عربية فصيحة بليغة
 - محترم وحكيم في الرد
 - تراعي الأدب الإسلامي في الحوار`;
-        userContent = userText;
+        userContent = typeof content === 'string' ? content : JSON.stringify(content);
         temperature = 0.7;
         break;
 
@@ -116,10 +75,13 @@ export async function POST(req: NextRequest) {
 قاعدة ذهبية: يمنع منعاً باتاً إضافة أي معلومة من عندك.
 - التزم حرفياً بما هو مكتوب في النص المرفق فقط
 - لا تضف تفسيراً أو شرحاً أو معلومة خارجية إطلاقاً
-- إذا لم يذكر النص معلومة معينة فلا تذكرها
-- استخرج النقاط الرئيسية بترتيب منطقي
+- لا تضف أي حديث أو آية أو اقتباس غير موجود في النص
+- إذا لم يذكر النص معلومة معينة فلا تذكرها أبداً
+- استخرج النقاط الرئيسية والمطالب الأساسية فقط
+- رتب الأفكار بترتيب منطقي واضح
 - احفظ الأحاديث والآيات كما وردت في النص كاملة
-- إذا كان النص فارغاً أو قصيراً، قل: النص غير كافٍ للتلخيص`;
+- لغتك عربية فصيحة واضحة ومنظمة
+- إذا كان النص فارغاً أو قصيراً، قل فقط: النص غير كافٍ للتلخيص`;
         userContent = content;
         break;
 
@@ -130,6 +92,8 @@ export async function POST(req: NextRequest) {
 3. اقتراح أدلة وقرائن أقوى لتعزيز البحث
 4. التحقق من صحة الأحاديث والآيات المذكورة
 5. اقتراح تحسينات هيكلية وعلمية
+6. الإشارة إلى أي قصور في التوثيق أو الاستدلال
+7. تقديم بدائل أكثر قوة للادعاءات الضعيفة
 أجب باللغة العربية بطريقة أكاديمية مهنية.`;
         userContent = content;
         break;
@@ -154,15 +118,15 @@ export async function POST(req: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 400 });
+        return NextResponse.json({ success: false, error: `طلب غير معروف: ${action}` }, { status: 400 });
     }
 
     // ================================================================
-    //  المفكر الشيعي → Gemini فقط (لا بديل)
+    //  المفكر الشيعي → Gemini فقط (مكتبة رسمية @google/generative-ai)
     // ================================================================
     if (action === 'thinker') {
       if (!GEMINI_API_KEY) {
-        return NextResponse.json({ error: 'مفتاح Gemini غير مضبوط. أضف GEMINI_API_KEY في إعدادات Vercel.' }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'GEMINI_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
       }
       try {
         let promptText = userContent;
@@ -171,26 +135,42 @@ export async function POST(req: NextRequest) {
           promptText = `التاريخ الحواري السابق:\n${history}\n\nالسؤال الأخير: ${content}`;
         }
         const result = await callGemini(GEMINI_API_KEY, systemPrompt, promptText, temperature, maxTokens);
-        if (result) return NextResponse.json({ success: true, result });
-        return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+        return NextResponse.json({ success: true, result });
       } catch (e: any) {
-        return NextResponse.json({ error: e.message || 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+        console.error('Thinker (Gemini) error:', e);
+        return NextResponse.json({ success: false, error: `خطأ Gemini: ${e.message}` });
       }
     }
 
     // ================================================================
-    //  الملخص + التدقيق + البحث → DeepSeek فقط (لا بديل)
+    //  الأستاذ (الملخص) → DeepSeek فقط
     // ================================================================
-    if (action === 'summarize' || action === 'validate' || action === 'search') {
+    if (action === 'summarize') {
       if (!DEEPSEEK_API_KEY) {
-        return NextResponse.json({ error: 'مفتاح DeepSeek غير مضبوط. أضف DEEPSEEK_API_KEY في إعدادات Vercel.' }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'DEEPSEEK_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
       }
       try {
         const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
-        if (result) return NextResponse.json({ success: true, result });
-        return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+        return NextResponse.json({ success: true, result });
       } catch (e: any) {
-        return NextResponse.json({ error: e.message || 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+        console.error('Summarize (DeepSeek) error:', e);
+        return NextResponse.json({ success: false, error: `خطأ DeepSeek: ${e.message}` });
+      }
+    }
+
+    // ================================================================
+    //  تدقيق البحث + البحث → Gemini (مكتبة رسمية)
+    // ================================================================
+    if (action === 'validate' || action === 'search') {
+      if (!GEMINI_API_KEY) {
+        return NextResponse.json({ success: false, error: 'GEMINI_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
+      }
+      try {
+        const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
+        return NextResponse.json({ success: true, result });
+      } catch (e: any) {
+        console.error(`${action} (Gemini) error:`, e);
+        return NextResponse.json({ success: false, error: `خطأ Gemini: ${e.message}` });
       }
     }
 
@@ -198,26 +178,26 @@ export async function POST(req: NextRequest) {
     //  التصنيف → DeepSeek أولاً ثم Gemini
     // ================================================================
     if (action === 'categorize') {
-      try {
-        if (DEEPSEEK_API_KEY) {
+      if (DEEPSEEK_API_KEY) {
+        try {
           const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
           const jsonMatch = result.match(/\{[\s\S]*\}/);
           if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
-        }
-        if (GEMINI_API_KEY) {
+        } catch (e: any) { console.error('categorize DeepSeek:', e); }
+      }
+      if (GEMINI_API_KEY) {
+        try {
           const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
           const jsonMatch = result.match(/\{[\s\S]*\}/);
           if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
-        }
-      } catch (e: any) {
-        console.error('Categorize failed:', e.message);
+        } catch (e: any) { console.error('categorize Gemini:', e); }
       }
       return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 } });
     }
 
-    return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 400 });
+    return NextResponse.json({ success: false, error: `طلب غير معروف: ${action}` }, { status: 400 });
   } catch (error: any) {
-    console.error('AI API Error:', error);
-    return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+    console.error('AI API fatal:', error);
+    return NextResponse.json({ success: false, error: `خطأ داخلي: ${error.message}` });
   }
 }

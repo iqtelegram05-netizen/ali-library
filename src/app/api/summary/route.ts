@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // ================================================================
-//  نظام الأستاذ (الملخص) — DeepSeek فقط
-//  بدون z-ai-web-dev-sdk — مفتاح Vercel فقط
-//  حد أقصى: طلب واحد كل 3 ثوانٍ
+//  نظام الأستاذ (الملخص) — DeepSeek فقط — بدون قيود
 // ================================================================
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-// === حد أقصى طلب واحد كل 3 ثوانٍ ===
-const lastRequest: Record<string, number> = {};
-const COOLDOWN_MS = 3000;
 
 const SYSTEM_PROMPT = `أنت ملخص صارم للنصوص الدينية والفكرية.
 قاعدة ذهبية: يمنع منعاً باتاً إضافة أي معلومة من عندك.
@@ -31,62 +25,46 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { text, url } = body;
 
-    // === منع الطلبات الفارغة ===
     if (!text || typeof text !== 'string') {
-      return NextResponse.json({ error: 'يرجى كتابة نص أو رفع ملف قبل التلخيص' }, { status: 400 });
-    }
-    if (text.trim().length < 50) {
-      return NextResponse.json({ error: 'النص قصير جداً. الصق نصاً أطول لكي يتم تلخيصه.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'يجب تقديم نص للتلخيص' });
     }
 
-    // === فاصل زمني 3 ثوانٍ ===
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'global';
-    const now = Date.now();
-    const last = lastRequest[`summary:${ip}`] || 0;
-    if (now - last < COOLDOWN_MS) {
-      const waitSec = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
-      return NextResponse.json({ error: `يرجى المحاولة بعد ${waitSec} ثوانٍ، النظام قيد المعالجة`, cooldown: true }, { status: 429 });
-    }
-    lastRequest[`summary:${ip}`] = now;
-
-    // === التحقق من مفتاح DeepSeek ===
     if (!DEEPSEEK_API_KEY) {
-      return NextResponse.json({ error: 'مفتاح DeepSeek غير مضبوط. أضف DEEPSEEK_API_KEY في إعدادات Vercel.' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'DEEPSEEK_API_KEY فارغ أو غير موجود في متغيرات Vercel' });
     }
 
-    const userMessage = `قم بتلخيص النص التالي بشكل مختصر ومنظم:\n\n---\n${text.trim()}\n---`;
-    const finalMessage = url ? `النص مأخوذ من: ${url}\n\n${userMessage}` : userMessage;
+    const userMessage = url
+      ? `النص مأخوذ من: ${url}\n\nقم بتلخيص النص التالي:\n\n---\n${text.trim()}\n---`
+      : `قم بتلخيص النص التالي:\n\n---\n${text.trim()}\n---`;
 
     const res = await fetch(DEEPSEEK_BASE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: finalMessage }],
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: userMessage }],
         temperature: 0.3,
         max_tokens: 2048,
       }),
       signal: AbortSignal.timeout(60000),
     });
 
-    if (res.status === 429) {
-      return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة', cooldown: true }, { status: 429 });
-    }
     if (!res.ok) {
-      console.error('DeepSeek summary error:', res.status);
-      return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+      const errorBody = await res.text().catch(() => '');
+      console.error('DeepSeek summary error:', res.status, errorBody);
+      return NextResponse.json({ success: false, error: `خطأ DeepSeek HTTP ${res.status}: ${errorBody.slice(0, 500)}` });
     }
 
     const d = await res.json();
     const summary = d?.choices?.[0]?.message?.content || '';
 
     if (!summary) {
-      return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'DeepSeek رد بنتيجة فارغة' });
     }
 
     return NextResponse.json({ success: true, summary, source: url || null, originalLength: text.length, summaryLength: summary.length });
   } catch (error: any) {
-    console.error('Summary API Error:', error);
-    return NextResponse.json({ error: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }, { status: 500 });
+    console.error('Summary API fatal:', error);
+    return NextResponse.json({ success: false, error: `خطأ داخلي: ${error.message}` });
   }
 }
