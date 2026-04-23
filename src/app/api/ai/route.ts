@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // ================================================================
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 async function callDeepSeek(apiKey: string, messages: Array<{role: string; content: string}>, temperature: number = 0.3, maxTokens: number = 4000): Promise<string> {
   const res = await fetch(DEEPSEEK_BASE_URL, {

@@ -1183,7 +1183,7 @@ function SummarizerSection() {
     <section id="summarizer" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="section-divider mb-20" />
       <div className="max-w-5xl mx-auto">
-        <SectionHeader icon={Sparkles} title="المُلخِّص الذكي - DeepSeek" subtitle="ارفع صفحات أو أبواب كاملة من الكتب ليقوم الذكاء الاصطناعي بتلخيصها واستخراج زبدة المطالب" />
+        <SectionHeader icon={Sparkles} title="وحدة الأستاذ الذكي" subtitle="ارفع صفحات أو أبواب كاملة من الكتب ليقوم الذكاء الاصطناعي بتلخيصها واستخراج زبدة المطالب" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
           <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl shadow-lg shadow-black/20">
             <div className="flex items-center justify-between mb-4">
