@@ -9,6 +9,7 @@ import {
   List, X, BookMarked, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import GeoHoverEffect from '@/components/GeoHoverEffect';
 
 /* ===================================================================
    LOADING SCREEN
@@ -204,6 +205,8 @@ function ReaderContent() {
 
   return (
     <div ref={setContainerRef} className="min-h-screen flex flex-col" style={{ backgroundColor: bgColor, transition: 'background-color 0.3s ease' }}>
+      {/* Global Geometric Hover Effects */}
+      <GeoHoverEffect />
       {/* === TOOLBAR === */}
       <div className="sticky top-0 z-50 shrink-0" style={{ backgroundColor: 'rgba(13,17,23,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
         <div className="max-w-5xl mx-auto px-3 sm:px-4">

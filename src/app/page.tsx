@@ -17,6 +17,8 @@ import ReactMarkdown from 'react-markdown';
 const MermaidRenderer = dynamic(() => import('@/components/MermaidRenderer'), { ssr: false });
 import CosmicPortal from '@/components/CosmicPortal';
 import CosmicParticles from '@/components/CosmicParticles';
+import FloatingBookQuotes from '@/components/FloatingBookQuotes';
+import GeoHoverEffect from '@/components/GeoHoverEffect';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -210,6 +212,12 @@ export default function Home() {
 
       {/* Cosmic Floating Particles */}
       <CosmicParticles />
+
+      {/* Floating Book Quotes Background - responds to scroll & mouse */}
+      <FloatingBookQuotes />
+
+      {/* Global Geometric Hover Effects on all buttons & interactive elements */}
+      <GeoHoverEffect />
 
       {/* Navigation */}
       <Navigation

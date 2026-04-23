@@ -536,3 +536,254 @@ input::placeholder, textarea::placeholder {
 .cosmic-hover:hover { animation: cosmic-hover-glow 1.5s ease-in-out infinite; }
 .cosmic-float { animation: cosmic-float 6s ease-in-out infinite; }
 .shape-draw { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: shape-draw 1.5s ease-out forwards; }
+
+/* === ENHANCED GEOMETRIC HOVER ANIMATIONS === */
+
+/* Button hover geometric morph */
+@keyframes btn-hover-morph {
+  0% { clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); opacity: 0.15; }
+  33% { clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%); opacity: 0.25; }
+  66% { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); opacity: 0.2; }
+  100% { clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); opacity: 0.15; }
+}
+
+/* Ripple ring expanding from hover point */
+@keyframes hover-ripple {
+  0% { transform: scale(0); opacity: 0.5; border-width: 2px; }
+  100% { transform: scale(2.5); opacity: 0; border-width: 0.5px; }
+}
+
+/* Geometric corner brackets on hover */
+@keyframes corner-bracket-tl {
+  0%, 100% { width: 0; height: 0; opacity: 0; }
+  50% { width: 20px; height: 20px; opacity: 0.6; }
+}
+@keyframes corner-bracket-tr {
+  0%, 100% { width: 0; height: 0; opacity: 0; }
+  50% { width: 20px; height: 20px; opacity: 0.6; }
+}
+@keyframes corner-bracket-bl {
+  0%, 100% { width: 0; height: 0; opacity: 0; }
+  50% { width: 20px; height: 20px; opacity: 0.6; }
+}
+@keyframes corner-bracket-br {
+  0%, 100% { width: 0; height: 0; opacity: 0; }
+  50% { width: 20px; height: 20px; opacity: 0.6; }
+}
+
+/* Wireframe orbit on hover */
+@keyframes hover-orbit {
+  0% { transform: rotate(0deg) scale(0.8); opacity: 0; }
+  30% { opacity: 0.4; }
+  100% { transform: rotate(180deg) scale(1.2); opacity: 0; }
+}
+
+/* Geometric particle spawn on hover */
+@keyframes geo-spawn {
+  0% { transform: scale(0) rotate(-90deg); opacity: 0; }
+  40% { transform: scale(1.2) rotate(0deg); opacity: 0.8; }
+  100% { transform: scale(0.5) rotate(90deg); opacity: 0; }
+}
+
+/* Floating shape breathe */
+@keyframes shape-breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.2; }
+  25% { transform: scale(1.15) rotate(5deg); opacity: 0.35; }
+  50% { transform: scale(0.9) rotate(-3deg); opacity: 0.15; }
+  75% { transform: scale(1.1) rotate(2deg); opacity: 0.3; }
+}
+
+/* All buttons get geometric hover treatment */
+button, [role="button"], a, [data-geo-hover] {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Geometric overlay on button hover - before click */
+button::before, [role="button"]::before, [data-geo-hover]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(212, 175, 55, 0.04));
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.4s ease, clip-path 0.6s ease;
+  transform: scale(0.8) rotate(-30deg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+button:hover::before, [role="button"]:hover::before, [data-geo-hover]:hover::before {
+  opacity: 1;
+  transform: scale(1.1) rotate(0deg);
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  animation: btn-hover-morph 3s ease-in-out infinite;
+}
+
+/* Geometric after overlay - diamond wireframe */
+button::after, [role="button"]::after, [data-geo-hover]::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  border: 1px solid rgba(16, 185, 129, 0);
+  opacity: 0;
+  transition: opacity 0.3s ease, border-color 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+button:hover::after, [role="button"]:hover::after, [data-geo-hover]:hover::after {
+  opacity: 0.3;
+  border-color: rgba(16, 185, 129, 0.25);
+  animation: hover-orbit 2s ease-in-out infinite;
+}
+
+/* Book cards enhanced hover */
+.book-card:hover {
+  box-shadow:
+    0 0 20px rgba(16, 185, 129, 0.1),
+    0 0 40px rgba(212, 175, 55, 0.05),
+    0 8px 32px rgba(16, 185, 129, 0.12);
+}
+
+/* Input fields get geometric glow on focus */
+.input-glow:focus {
+  box-shadow:
+    0 0 0 2px rgba(16, 185, 129, 0.2),
+    0 0 20px rgba(16, 185, 129, 0.08),
+    0 0 40px rgba(212, 175, 55, 0.04);
+}
+
+/* Checkbox geometric highlight */
+input[type="checkbox"]:checked {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+/* Scrollbar glow on hover */
+::-webkit-scrollbar-thumb:hover {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3), 0 0 16px rgba(212, 175, 55, 0.2);
+}
+
+/* Category tabs geometric hover */
+.category-active {
+  position: relative;
+}
+.category-active::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  opacity: 0;
+  animation: wireframe-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Geometric decoration on section dividers */
+.section-divider {
+  position: relative;
+  height: 1px;
+  overflow: visible;
+}
+.section-divider::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* All interactive elements - smooth cosmic transition */
+*, *::before, *::after {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Holo card enhanced hover geometric */
+.holo-card:hover {
+  box-shadow:
+    0 0 30px rgba(16, 185, 129, 0.15),
+    0 0 60px rgba(212, 175, 55, 0.08),
+    0 8px 32px rgba(16, 185, 129, 0.12);
+  transform: translateY(-4px) scale(1.01);
+}
+.holo-card::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  border: 1px solid rgba(16, 185, 129, 0);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.holo-card:hover::after {
+  opacity: 0.2;
+  border-color: rgba(16, 185, 129, 0.2);
+  animation: shape-breathe 4s ease-in-out infinite;
+}
+
+/* Toast / notification geometric border */
+.toast {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Select dropdown geometric */
+select:focus {
+  box-shadow:
+    0 0 0 2px rgba(16, 185, 129, 0.2),
+    0 0 20px rgba(16, 185, 129, 0.08);
+}
+
+/* Geometric pulse on active/focus elements */
+button:active, [role="button"]:active {
+  transform: scale(0.97);
+}
+
+/* Textarea focus glow */
+textarea:focus {
+  box-shadow:
+    0 0 0 2px rgba(16, 185, 129, 0.2),
+    0 0 20px rgba(16, 185, 129, 0.08),
+    0 0 40px rgba(212, 175, 55, 0.04);
+}
+
+/* Floating label animation for inputs */
+label {
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+
+/* Geometric shadow on nav items */
+.nav-active {
+  box-shadow:
+    0 0 15px rgba(16, 185, 129, 0.1),
+    0 0 30px rgba(212, 175, 55, 0.05),
+    inset 0 0 15px rgba(16, 185, 129, 0.05);
+}
+
+/* Card entrance animation variants */
+@keyframes card-entrance {
+  0% { transform: scale(0.8) rotate(-5deg); opacity: 0; filter: blur(8px); }
+  60% { filter: blur(2px); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0px); }
+}
+
+/* Star shape clip */
+.star-clip {
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+/* Cross shape clip */
+.cross-clip {
+  clip-path: polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%);
+}
+
+/* Octagon shape clip */
+.octagon-clip {
+  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+}
