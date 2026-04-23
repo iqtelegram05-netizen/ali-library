@@ -1,111 +1,144 @@
 import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 // ================================================================
 //  AI Router — نظام التدوير الذكي (Key Rotation)
-//  3 مفاتيح DeepSeek تعمل بالتناوب مع انتقال تلقائي عند الفشل
-//  بدون أي انتظار أو تأخير — اتصال مباشر وسريع
+//  مكتبة openai رسمية ↔ DeepSeek
+//  3 مفاتيح: DEEPSEEK_KEY_1 / DEEPSEEK_KEY_2 / DEEPSEEK_KEY_3
+//  انتقال تلقائي عند: 401 / 402 / 429 / timeout
 // ================================================================
 
-const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEEPSEEK_MODEL = 'deepseek-chat';
+const DEEPSEEK_BASE = 'https://api.deepseek.com';
+const MODEL = 'deepseek-chat';
 
-// مؤشر التدوير — يتغير مع كل طلب تلقائياً
-let keyIndex = 0;
+// مؤشر التدوير
+let keyIdx = 0;
 
-// جلب مصفوفة المفاتيح من Vercel Env
-function getKeys(): string[] {
-  const k1 = (process.env.DEEPSEEK_KEY_1 || '').trim();
-  const k2 = (process.env.DEEPSEEK_KEY_2 || '').trim();
-  const k3 = (process.env.DEEPSEEK_KEY_3 || '').trim();
-  return [k1, k2, k3].filter(k => k.length > 0);
+// ---------------------------------------------------------------
+//  جلب مصفوفة المفاتيح من Vercel + Debug
+// ---------------------------------------------------------------
+function getKeys(): { key: string; label: string }[] {
+  const env = process.env;
+
+  const k1 = (env.DEEPSEEK_KEY_1 || '').trim();
+  const k2 = (env.DEEPSEEK_KEY_2 || '').trim();
+  const k3 = (env.DEEPSEEK_KEY_3 || '').trim();
+
+  const raw: { key: string; label: string }[] = [
+    { key: k1, label: 'DEEPSEEK_KEY_1' },
+    { key: k2, label: 'DEEPSEEK_KEY_2' },
+    { key: k3, label: 'DEEPSEEK_KEY_3' },
+  ];
+
+  // Debug: طباعة حالة كل مفتاح
+  for (const item of raw) {
+    if (!item.key) {
+      console.warn(`[Key Debug] المفتاح ${item.label} غير موجود في إعدادات Vercel`);
+    } else {
+      console.log(`[Key Debug] ${item.label} موجود (${item.key.slice(0, 8)}...${item.key.slice(-4)})`);
+    }
+  }
+
+  const valid = raw.filter(item => item.key.length > 0);
+  if (valid.length === 0) {
+    console.error('[Key Debug] لا يوجد أي مفتاح DeepSeek صالح في متغيرات Vercel!');
+  }
+
+  return valid;
 }
 
-// اختيار المفتاح التالي بالتناوب (Round-Robin)
-function getNextKey(): string | null {
-  const keys = getKeys();
-  if (keys.length === 0) return null;
-  keyIndex = keyIndex % keys.length;
-  const key = keys[keyIndex];
-  keyIndex++;
-  return key;
+// ---------------------------------------------------------------
+//  إنشاء عميل OpenAI مرتبط بمفتاح معين
+// ---------------------------------------------------------------
+function createClient(apiKey: string): OpenAI {
+  return new OpenAI({
+    apiKey,
+    baseURL: DEEPSEEK_BASE,
+  });
 }
 
-// استدعاء DeepSeek بمفتاح محدد
-async function callDeepSeekWithKey(
+// ---------------------------------------------------------------
+//  استدعاء DeepSeek بمفتاح واحد
+// ---------------------------------------------------------------
+async function callWithKey(
   apiKey: string,
   messages: Array<{ role: string; content: string }>,
   temperature: number = 0.7,
   maxTokens: number = 4096
 ): Promise<string> {
-  const res = await fetch(DEEPSEEK_BASE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-    signal: AbortSignal.timeout(90000),
+  const client = createClient(apiKey);
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: messages as any,
+    temperature,
+    max_tokens: maxTokens,
   });
 
-  if (!res.ok) {
-    const errorBody = await res.text().catch(() => '');
-    throw new Error(`DeepSeek HTTP ${res.status}: ${errorBody.slice(0, 500)}`);
-  }
-
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content || '';
+  return response.choices[0]?.message?.content || '';
 }
 
-// استدعاء ذكي مع تدوير المفاتيح — ينتقل للمفتاح التالي تلقائياً عند الفشل
-async function callDeepSeekSmart(
+// ---------------------------------------------------------------
+//  استدعاء ذكي مع تدوير تلقائي
+// ---------------------------------------------------------------
+async function callSmart(
   messages: Array<{ role: string; content: string }>,
   temperature: number = 0.7,
   maxTokens: number = 4096
-): Promise<{ result: string; keyUsed: string }> {
+): Promise<{ result: string; keyLabel: string }> {
   const keys = getKeys();
+
   if (keys.length === 0) {
-    throw new Error('لا توجد مفاتيح DeepSeek. تأكد من إضافة DEEPSEEK_KEY_1 في متغيرات Vercel');
+    throw new Error('لا توجد مفاتيح DeepSeek. أضف DEEPSEEK_KEY_1 في متغيرات Vercel.');
   }
 
-  // حفظ مؤشر البداية لمنع الحلقة اللانهائية
-  const startIndex = keyIndex % keys.length;
-  let currentKey = getNextKey();
+  const totalKeys = keys.length;
   let attempts = 0;
 
-  while (attempts < keys.length) {
+  while (attempts < totalKeys) {
+    const current = keys[(keyIdx + attempts) % totalKeys];
     try {
-      const result = await callDeepSeekWithKey(currentKey!, messages, temperature, maxTokens);
-      return { result, keyUsed: `KEY_${(keyIndex + attempts) % keys.length + 1}` };
+      console.log(`[Key Rotation] تجربة ${current.label} (محاولة ${attempts + 1}/${totalKeys})`);
+      const result = await callWithKey(current.key, messages, temperature, maxTokens);
+      keyIdx = (keyIdx + attempts + 1) % totalKeys; // تحريك المؤشر
+      console.log(`[Key Rotation] نجاح عبر ${current.label}`);
+      return { result, keyLabel: current.label };
     } catch (error: any) {
-      const errMsg = error?.message || '';
-      console.error(`[Key Rotation] المفتاح ${(keyIndex + attempts) % keys.length + 1} فشل: ${errMsg.slice(0, 200)}`);
+      const msg = error?.message || String(error);
+      console.error(`[Key Rotation] ${current.label} فشل: ${msg.slice(0, 300)}`);
 
-      // إذا كان الخطأ 401 (مفتاح غير صالح) أو 429 (تجاوز الحصة)، انتقل للمفتاح التالي
-      if (errMsg.includes('401') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('rate')) {
-        currentKey = getNextKey();
+      // فحص نوع الخطأ: هل ننتقل للمفتاح التالي؟
+      const isRetryable =
+        msg.includes('401') ||
+        msg.includes('402') ||
+        msg.includes('Insufficient') ||
+        msg.includes('429') ||
+        msg.includes('quota') ||
+        msg.includes('rate') ||
+        msg.includes('timeout') ||
+        msg.includes('ECONNREFUSED') ||
+        msg.includes('fetch failed');
+
+      if (isRetryable && attempts < totalKeys - 1) {
+        console.log(`[Key Rotation] الانتقال للمفتاح التالي...`);
         attempts++;
-        if (attempts < keys.length) {
-          console.log(`[Key Rotation] الانتقال للمفتاح التالي... (محاولة ${attempts + 1}/${keys.length})`);
-        }
+      } else if (attempts < totalKeys - 1) {
+        // أخطاء غير معروفة — نحاول المفتاح التالي أيضاً
+        console.log(`[Key Rotation] خطأ غير متوقع، تجربة المفتاح التالي...`);
+        attempts++;
       } else {
-        // أخطاء أخرى (شبكة، timeout) — أعد المحاولة بالمفتاح التالي أيضاً
-        currentKey = getNextKey();
-        attempts++;
-        if (attempts < keys.length) {
-          console.log(`[Key Rotation] خطأ شبكة، الانتقال للمفتاح التالي... (محاولة ${attempts + 1}/${keys.length})`);
-        }
+        // آخر مفتاح فشل
+        throw new Error(`${current.label} فشل: ${msg.slice(0, 200)}`);
       }
     }
   }
 
-  throw new Error(`جميع المفاتيح (${keys.length}) فشلت. حاول لاحقاً.`);
+  throw new Error('جميع المفاتيح فشلت.');
 }
 
+// ================================================================
+//  POST Handler
+// ================================================================
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -191,49 +224,33 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: `طلب غير معروف: ${action}` }, { status: 400 });
     }
 
-    // ================================================================
-    //  بناء الرسائل
-    // ================================================================
+    // بناء الرسائل
     const apiMessages: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
     ];
 
-    // إضافة التاريخ الحواري للمفكر الشيعي
     if (action === 'thinker' && Array.isArray(messages) && messages.length > 0) {
-      const history = messages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
-      apiMessages.push(...history);
+      apiMessages.push(...messages.map(m => ({ role: m.role, content: m.content })));
     }
 
     apiMessages.push({ role: 'user', content: userContent });
 
-    // ================================================================
-    //  الاستدعاء الذكي مع التدوير
-    // ================================================================
+    // الاستدعاء الذكي مع التدوير
     try {
-      const { result, keyUsed } = await callDeepSeekSmart(apiMessages, temperature, maxTokens);
+      const { result, keyLabel } = await callSmart(apiMessages, temperature, maxTokens);
 
       if (action === 'categorize') {
         const jsonMatch = result.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          return NextResponse.json({
-            success: true,
-            result: JSON.parse(jsonMatch[0]),
-            keyUsed,
-          });
+          return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]), keyLabel });
         }
-        return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 }, keyUsed });
+        return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 }, keyLabel });
       }
 
-      return NextResponse.json({ success: true, result, keyUsed });
+      return NextResponse.json({ success: true, result, keyLabel });
     } catch (e: any) {
-      console.error(`[${action}] جميع المفاتيح فشلت:`, e.message);
-      return NextResponse.json({
-        success: false,
-        error: e.message,
-      });
+      console.error(`[${action}] فشل النهائي:`, e.message);
+      return NextResponse.json({ success: false, error: e.message });
     }
   } catch (error: any) {
     console.error('AI API fatal:', error);
