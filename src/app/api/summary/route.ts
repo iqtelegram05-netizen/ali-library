@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 //  يمنع إضافة أي معلومة خارجية
 // ================================================================
 
-const DEEPSEEK_API_KEY = 'sk-dbbe1b253b454598b3d7a5294701a96a';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-dbbe1b253b454598b3d7a5294701a96a';
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 const SYSTEM_PROMPT = `أنت مساعد في مكتبة العلي الرقمية. وظيفتك التلخيص فقط بناءً على النص المزود إليك أدناه. يمنع منعاً باتاً إضافة أي معلومة خارجية أو تاريخية ليست موجودة في النص المرفق. إذا لم تجد الإجابة في النص، قل: المعلومات غير متوفرة في هذا المصدر.`;
