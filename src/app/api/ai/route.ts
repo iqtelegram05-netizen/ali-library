@@ -15,6 +15,11 @@ function getClient(): OpenAI {
   if (!apiKey) {
     throw new Error('GROQ_API_KEY غير موجود في متغيرات Vercel');
   }
+  // فحص سريع: مفاتيح Groq تبدأ بـ gsk_
+  if (!apiKey.startsWith('gsk_')) {
+    console.warn(`[Groq] تحذير: المفتاح لا يبدأ بـ gsk_ — يبدأ بـ: ${apiKey.substring(0, 7)}...`);
+  }
+  console.log(`[Groq] المفتاح موجود، الطول: ${apiKey.length} حرف، البداية: ${apiKey.substring(0, 7)}...`);
   return new OpenAI({ apiKey, baseURL: GROQ_BASE });
 }
 
@@ -150,7 +155,24 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, result });
     } catch (e: any) {
-      console.error(`[${action}] Groq error:`, e.message);
+      const status = e?.status || e?.statusCode;
+      console.error(`[${action}] Groq error [${status}]:`, e.message);
+
+      if (status === 401) {
+        return NextResponse.json({
+          success: false,
+          error: 'مفتاح Groq غير صالح. تأكد أن المفتاح في Vercel يبدأ بـ gsk_ وليس فيه مسافات.',
+          debug: 'تحقق من متغير GROQ_API_KEY في إعدادات Vercel → Settings → Environment Variables',
+        });
+      }
+
+      if (status === 429) {
+        return NextResponse.json({
+          success: false,
+          error: 'تم تجاوز حد الطلبات. انتظر قليلاً وأعد المحاولة.',
+        });
+      }
+
       return NextResponse.json({ success: false, error: e.message });
     }
   } catch (error: any) {
