@@ -1,82 +1,112 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // ================================================================
-//  نظام الأستاذ — Gemini 1.5 Pro للبحث العميق
+//  نظام الأستاذ — Gemini 1.5 Pro + DeepSeek-V3 للبحث العميق
 //  يُرجع نصاً تحليلياً + خريطة ذهنية بصيغة Mermaid.js
+//  بدون الاعتماد على z-ai-web-dev-sdk
 // ================================================================
 
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
 
 /**
- * استدعاء Gemini 1.5 Pro API
+ * استدعاء Gemini 1.5 Pro
  */
 async function callGemini(systemPrompt: string, userMessage: string): Promise<string> {
-  // الطريقة الأولى: استخدام Gemini API المباشر
-  if (GEMINI_API_KEY) {
-    try {
-      const res = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: systemPrompt }]
-          },
-          contents: [{
-            parts: [{ text: userMessage }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 4096,
-          }
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
+  if (!GEMINI_API_KEY) throw new Error('مفتاح Gemini غير مضبوط');
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
-      }
-    } catch (e: any) {
-      console.warn('Gemini API direct call failed, falling back to z-ai-web-dev-sdk:', e.message);
-    }
+  const res = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ parts: [{ text: userMessage }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Gemini API error ${res.status}: ${errBody.slice(0, 200)}`);
   }
 
-  // الطريقة الثانية: الرجوع إلى z-ai-web-dev-sdk
-  try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
-    const zai = await ZAI.create();
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('لم يتم الحصول على رد من Gemini');
+  return text;
+}
 
-    const completion = await zai.chat.completions.create({
+/**
+ * استدعاء DeepSeek-V3
+ */
+async function callDeepSeek(systemPrompt: string, userMessage: string): Promise<string> {
+  if (!DEEPSEEK_API_KEY) throw new Error('مفتاح DeepSeek غير مضبوط');
+
+  const res = await fetch(DEEPSEEK_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
       temperature: 0.7,
       max_tokens: 4096,
-    });
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
 
-    return completion.choices[0]?.message?.content || 'لم يتم الحصول على نتيجة';
-  } catch (e: any) {
-    console.error('z-ai-web-dev-sdk fallback failed:', e);
-    throw new Error('فشل في الاتصال بخدمة الذكاء الاصطناعي');
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`DeepSeek API error ${res.status}: ${errBody.slice(0, 200)}`);
   }
+
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('لم يتم الحصول على رد من DeepSeek');
+  return text;
+}
+
+/**
+ * استدعاء ذكي — يحاول Gemini أولاً (أفضل للتحليل) ثم DeepSeek
+ */
+async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+  // محاولة Gemini أولاً (أفضل للخرائط الذهنية والتحليل العميق)
+  if (GEMINI_API_KEY) {
+    try {
+      return await callGemini(systemPrompt, userMessage);
+    } catch (e: any) {
+      console.warn('Gemini API failed, falling back to DeepSeek:', e.message);
+    }
+  }
+  // محاولة DeepSeek ثانياً
+  if (DEEPSEEK_API_KEY) {
+    try {
+      return await callDeepSeek(systemPrompt, userMessage);
+    } catch (e: any) {
+      console.warn('DeepSeek API failed:', e.message);
+    }
+  }
+  throw new Error('فشل في الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API في Vercel.');
 }
 
 /**
  * استخراج كود Mermaid من رد الذكاء الاصطناعي
  */
 function extractMermaid(text: string): string | null {
-  // البحث عن كود Mermaid محاط بـ ```mermaid ... ```
   const mermaidBlock = text.match(/```mermaid\s*\n([\s\S]*?)```/i);
   if (mermaidBlock) return mermaidBlock[1].trim();
 
-  // البحث عن كود Mermaid محاط بـ ```graph ... ```
   const graphBlock = text.match(/```graph\s*\n([\s\S]*?)```/i);
   if (graphBlock) return graphBlock[1].trim();
 
-  // البحث عن كود Mermaid محاط بـ ```mindmap ... ```
   const mindmapBlock = text.match(/```mindmap\s*\n([\s\S]*?)```/i);
   if (mindmapBlock) return mindmapBlock[1].trim();
 
@@ -150,8 +180,8 @@ mindmap
       userMessage = `السياق / المحتوى المرجعي:\n${context.trim()}\n\n---\n\nالسؤال: ${question.trim()}`;
     }
 
-    // Call AI
-    const fullResponse = await callGemini(systemPrompt, userMessage);
+    // Call AI (Gemini first, then DeepSeek)
+    const fullResponse = await callAI(systemPrompt, userMessage);
 
     // Extract Mermaid mind map
     const mermaidCode = extractMermaid(fullResponse);
