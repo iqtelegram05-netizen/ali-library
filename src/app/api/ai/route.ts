@@ -3,27 +3,29 @@ import { NextRequest, NextResponse } from 'next/server';
 // ================================================================
 //  AI Router — المفكر الشيعي مرتبط بـ Gemini
 //  الملخص وباقي الخدمات مرتبطة بـ DeepSeek
+//  المتغيرات تُقرأ ديناميكياً في كل طلب (runtime)
 // ================================================================
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
 
-async function callDeepSeek(messages: Array<{role: string; content: string}>, temperature: number = 0.3, maxTokens: number = 4000): Promise<string> {
+async function callDeepSeek(apiKey: string, messages: Array<{role: string; content: string}>, temperature: number = 0.3, maxTokens: number = 4000): Promise<string> {
   const res = await fetch(DEEPSEEK_BASE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({ model: 'deepseek-chat', messages, temperature, max_tokens: maxTokens }),
     signal: AbortSignal.timeout(90000),
   });
-  if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`DeepSeek error ${res.status}: ${e.slice(0, 200)}`); }
+  if (!res.ok) {
+    const e = await res.text().catch(() => '');
+    throw new Error(`DeepSeek API error ${res.status}: ${e.slice(0, 300)}`);
+  }
   const d = await res.json();
   return d?.choices?.[0]?.message?.content || '';
 }
 
-async function callGemini(systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4096): Promise<string> {
-  const res = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4096): Promise<string> {
+  const res = await fetch(`${GEMINI_BASE_URL}?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -33,13 +35,20 @@ async function callGemini(systemPrompt: string, userMessage: string, temperature
     }),
     signal: AbortSignal.timeout(90000),
   });
-  if (!res.ok) { const e = await res.text().catch(() => ''); throw new Error(`Gemini error ${res.status}: ${e.slice(0, 200)}`); }
+  if (!res.ok) {
+    const e = await res.text().catch(() => '');
+    throw new Error(`Gemini API error ${res.status}: ${e.slice(0, 300)}`);
+  }
   const d = await res.json();
   return d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // قراءة المتغيرات ديناميكياً في كل طلب
+    const DEEPSEEK_API_KEY = (process.env.DEEPSEEK_API_KEY || '').trim();
+    const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
+
     const body = await req.json();
     const { action, content, messages } = body;
     if (!action) return NextResponse.json({ error: 'Action is required' }, { status: 400 });
@@ -117,58 +126,92 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    // === المفكر الشيعي: يُستخدم Gemini مباشرة ===
-    if (action === 'thinker' && Array.isArray(messages) && messages.length > 0) {
+    // === المفكر الشيعي: Gemini أولاً ثم DeepSeek ===
+    if (action === 'thinker') {
+      let lastError = '';
+
       if (GEMINI_API_KEY) {
         try {
-          const history = messages.map(m => `${m.role === 'user' ? 'المستخدم' : 'المفكر الشيعي'}: ${m.content}`).join('\n\n');
-          const result = await callGemini(systemPrompt, `التاريخ الحواري السابق:\n${history}\n\nالسؤال الأخير: ${content}`, temperature, maxTokens);
-          return NextResponse.json({ success: true, result });
-        } catch (e: any) { console.error('Gemini thinker failed:', e.message); }
-      }
-      if (DEEPSEEK_API_KEY) {
-        try {
-          const apiMessages = [{ role: 'system', content: systemPrompt }, ...messages.map(m => ({ role: m.role, content: m.content }))];
-          const result = await callDeepSeek(apiMessages, temperature, maxTokens);
-          return NextResponse.json({ success: true, result });
-        } catch (e: any) { console.error('DeepSeek thinker failed:', e.message); }
-      }
-      return NextResponse.json({ error: 'فشل الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API.' }, { status: 500 });
-    }
-
-    // === باقي الأقسام: يُستخدم DeepSeek مباشرة ===
-    if (action === 'summarize' || action === 'validate' || action === 'search') {
-      if (DEEPSEEK_API_KEY) {
-        try {
-          const result = await callDeepSeek([{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
-          if (action === 'categorize') {
-            const jsonMatch = result.match(/\{[\s\S]*\}/);
-            if (jsonMatch) { return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) }); }
+          let promptText = userContent;
+          if (Array.isArray(messages) && messages.length > 0) {
+            const history = messages.map(m => `${m.role === 'user' ? 'المستخدم' : 'المفكر الشيعي'}: ${m.content}`).join('\n\n');
+            promptText = `التاريخ الحواري السابق:\n${history}\n\nالسؤال الأخير: ${content}`;
           }
-          return NextResponse.json({ success: true, result });
-        } catch (e: any) { console.error('DeepSeek failed:', e.message); }
+          const result = await callGemini(GEMINI_API_KEY, systemPrompt, promptText, temperature, maxTokens);
+          if (result) return NextResponse.json({ success: true, result });
+        } catch (e: any) {
+          lastError = e.message;
+          console.error('Gemini thinker failed:', lastError);
+        }
       }
-      if (GEMINI_API_KEY) {
+
+      if (DEEPSEEK_API_KEY) {
         try {
-          const result = await callGemini(systemPrompt, userContent, temperature, maxTokens);
-          return NextResponse.json({ success: true, result });
-        } catch (e: any) { console.error('Gemini failed:', e.message); }
+          const apiMessages = [{ role: 'system', content: systemPrompt }];
+          if (Array.isArray(messages) && messages.length > 0) {
+            apiMessages.push(...messages.map(m => ({ role: m.role, content: m.content })));
+          } else {
+            apiMessages.push({ role: 'user', content: userContent });
+          }
+          const result = await callDeepSeek(DEEPSEEK_API_KEY, apiMessages, temperature, maxTokens);
+          if (result) return NextResponse.json({ success: true, result });
+        } catch (e: any) {
+          lastError = e.message;
+          console.error('DeepSeek thinker failed:', lastError);
+        }
       }
-      return NextResponse.json({ error: 'فشل الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API.' }, { status: 500 });
+
+      // لا يوجد أي مفتاح
+      if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
+        return NextResponse.json({ error: 'مفاتيح API غير مضبوطة. أضف GEMINI_API_KEY و DEEPSEEK_API_KEY في إعدادات Vercel → Environment Variables.' }, { status: 500 });
+      }
+
+      return NextResponse.json({ error: `فشل في الاتصال. التفاصيل: ${lastError}` }, { status: 500 });
     }
 
-    // === التصنيف: DeepSeek أولاً ثم Gemini ===
+    // === الملخص + التدقيق + البحث: DeepSeek أولاً ثم Gemini ===
+    if (action === 'summarize' || action === 'validate' || action === 'search') {
+      let lastError = '';
+
+      if (DEEPSEEK_API_KEY) {
+        try {
+          const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
+          if (result) return NextResponse.json({ success: true, result });
+        } catch (e: any) {
+          lastError = e.message;
+          console.error(`DeepSeek ${action} failed:`, lastError);
+        }
+      }
+
+      if (GEMINI_API_KEY) {
+        try {
+          const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
+          if (result) return NextResponse.json({ success: true, result });
+        } catch (e: any) {
+          lastError = e.message;
+          console.error(`Gemini ${action} failed:`, lastError);
+        }
+      }
+
+      if (!DEEPSEEK_API_KEY && !GEMINI_API_KEY) {
+        return NextResponse.json({ error: 'مفاتيح API غير مضبوطة. أضف DEEPSEEK_API_KEY و GEMINI_API_KEY في إعدادات Vercel → Environment Variables.' }, { status: 500 });
+      }
+
+      return NextResponse.json({ error: `فشل في الاتصال. التفاصيل: ${lastError}` }, { status: 500 });
+    }
+
+    // === التصنيف ===
     if (action === 'categorize') {
       if (DEEPSEEK_API_KEY) {
         try {
-          const result = await callDeepSeek([{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
+          const result = await callDeepSeek(DEEPSEEK_API_KEY, [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }], temperature, maxTokens);
           const jsonMatch = result.match(/\{[\s\S]*\}/);
           if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
         } catch (e: any) { console.error('DeepSeek categorize failed:', e.message); }
       }
       if (GEMINI_API_KEY) {
         try {
-          const result = await callGemini(systemPrompt, userContent, temperature, maxTokens);
+          const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
           const jsonMatch = result.match(/\{[\s\S]*\}/);
           if (jsonMatch) return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
         } catch (e: any) { console.error('Gemini categorize failed:', e.message); }
@@ -179,6 +222,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
     console.error('AI API Error:', error);
-    return NextResponse.json({ error: error.message || 'حدث خطأ' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'حدث خطأ غير متوقع' }, { status: 500 });
   }
 }
