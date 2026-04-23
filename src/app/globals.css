@@ -456,3 +456,83 @@ input::placeholder, textarea::placeholder {
 .book-card:hover::after {
   left: 150%;
 }
+
+/* === COSMIC GEOMETRIC ANIMATIONS === */
+
+/* Shape draw-in from nothing */
+@keyframes shape-draw {
+  0% { stroke-dashoffset: 1000; opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+/* Shape appear from center scale */
+@keyframes cosmic-appear {
+  0% { transform: scale(0) rotate(-180deg); opacity: 0; filter: blur(10px); }
+  60% { filter: blur(2px); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0px); }
+}
+
+/* Geometric burst outward */
+@keyframes geo-burst {
+  0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Particle trail */
+@keyframes particle-trail {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* Glow ripple */
+@keyframes glow-ripple {
+  0% { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* Wireframe pulse */
+@keyframes wireframe-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.4; }
+}
+
+/* Cosmic float */
+@keyframes cosmic-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(5deg); }
+  75% { transform: translateY(4px) rotate(-3deg); }
+}
+
+/* Portal ring expand */
+@keyframes portal-ring {
+  0% { transform: scale(0); opacity: 0; border-width: 4px; }
+  50% { opacity: 0.8; }
+  100% { transform: scale(1); opacity: 0.3; border-width: 1px; }
+}
+
+/* Lines extend from center */
+@keyframes line-extend {
+  0% { transform: scaleY(0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: scaleY(1); opacity: 0.4; }
+}
+
+/* Cosmic hover glow */
+@keyframes cosmic-hover-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.1), 0 0 10px rgba(16, 185, 129, 0.05); }
+  50% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.3), 0 0 30px rgba(212, 175, 55, 0.15), 0 0 45px rgba(16, 185, 129, 0.08); }
+}
+
+/* Button magnetic pull */
+@keyframes magnetic-pull {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1.02); }
+}
+
+/* Cosmic utility classes */
+.cosmic-appear { animation: cosmic-appear 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.cosmic-hover:hover { animation: cosmic-hover-glow 1.5s ease-in-out infinite; }
+.cosmic-float { animation: cosmic-float 6s ease-in-out infinite; }
+.shape-draw { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: shape-draw 1.5s ease-out forwards; }

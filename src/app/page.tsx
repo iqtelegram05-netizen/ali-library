@@ -15,6 +15,8 @@ import {
 import ReactMarkdown from 'react-markdown';
 
 const MermaidRenderer = dynamic(() => import('@/components/MermaidRenderer'), { ssr: false });
+import CosmicPortal from '@/components/CosmicPortal';
+import CosmicParticles from '@/components/CosmicParticles';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -141,6 +143,7 @@ const HERO_BUTTONS = [
 export default function Home() {
   const [activeSection, setActiveSection] = useState('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPortal, setShowPortal] = useState(true);
   // === مخزن الكتب الدائم (Persistent Book Storage via localStorage) ===
   const STORAGE_KEY = 'ali-library-books';
   const [books, setBooks] = useState<BookItem[]>([]);
@@ -198,9 +201,15 @@ export default function Home() {
 
   return (
     <div style={{ backgroundColor: '#0a0a0f' }}>
+      {/* Cosmic Portal Loading Animation */}
+      {showPortal && <CosmicPortal onComplete={() => setShowPortal(false)} />}
+
       {/* Geometric Background Overlay - Dark */}
       <div className="fixed inset-0 geo-pattern pointer-events-none z-0" />
       <div className="fixed inset-0 grid-overlay pointer-events-none z-0" />
+
+      {/* Cosmic Floating Particles */}
+      <CosmicParticles />
 
       {/* Navigation */}
       <Navigation
@@ -228,13 +237,62 @@ export default function Home() {
 
       {/* Main Content Sections */}
       <main className="relative z-10">
-        <FetchEngineSection books={books} setBooks={setBooks} />
-        <BooksArchiveSection books={books} setBooks={setBooks} />
-        <SummarizerSection />
-        <ValidatorSection />
-        <ThinkerSection />
-        <BiographySection />
-        <AdvancedSearchSection />
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <FetchEngineSection books={books} setBooks={setBooks} />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <BooksArchiveSection books={books} setBooks={setBooks} />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <SummarizerSection />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <ValidatorSection />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <ThinkerSection />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <BiographySection />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <AdvancedSearchSection />
+        </motion.div>
       </main>
 
       {/* Footer */}
@@ -256,6 +314,7 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
 }) {
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-strong">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -275,14 +334,26 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
                 <button
                   key={item.id}
                   onClick={() => scrollToSection(item.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border
-                    ${isActive
-                      ? 'nav-active'
-                      : 'text-gray-400 hover:text-gray-100 hover:bg-[#0d1117] hover:border-emerald-500/20'
-                    }`}
+                  onMouseEnter={() => setHoveredNav(item.id)}
+                  onMouseLeave={() => setHoveredNav(null)}
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border overflow-hidden
+                    ${isActive ? 'nav-active' : 'text-gray-400 hover:text-gray-100'}`}
                 >
-                  <Icon size={14} />
-                  <span>{item.label}</span>
+                  {/* Geometric hover background */}
+                  <AnimatePresence>
+                    {hoveredNav === item.id && !isActive && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0, rotate: -90 }}
+                        animate={{ scale: 1, opacity: 0.15, rotate: 0 }}
+                        exit={{ scale: 0, opacity: 0, rotate: 90 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute inset-0 border-2 border-emerald-500/40"
+                        style={{ clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)' }}
+                      />
+                    )}
+                  </AnimatePresence>
+                  <Icon size={14} className="relative z-10" />
+                  <span className="relative z-10">{item.label}</span>
                 </button>
               );
             })}
@@ -359,7 +430,7 @@ function HeroSection({ scrollToSection }: { scrollToSection: (id: string) => voi
 
       {/* Orbital Logo System */}
       <div className="relative z-10 flex flex-col items-center">
-        <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1, ease: 'easeOut' }} className="relative">
+        <motion.div initial={{ opacity: 0, scale: 0, rotate: -180 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }} className="relative">
           {/* Orbital Rings */}
           <div className="absolute inset-[-70px] rounded-full border border-emerald-400/25 orbit-1" />
           <div className="absolute inset-[-95px] rounded-full border border-emerald-400/20 orbit-2" />
@@ -413,12 +484,26 @@ function HeroSection({ scrollToSection }: { scrollToSection: (id: string) => voi
                 <motion.button
                   key={item.section}
                   whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => scrollToSection(item.section)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0d1117]/80 border border-emerald-500/20 text-gray-200 hover:border-emerald-500/40 hover:shadow-md hover:shadow-emerald-500/10 backdrop-blur-xl transition-all duration-200 text-sm font-medium cursor-pointer"
+                  className="relative group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0d1117]/80 border border-emerald-500/20 text-gray-200 hover:border-emerald-500/40 backdrop-blur-xl transition-all duration-200 text-sm font-medium cursor-pointer overflow-hidden"
                 >
-                  <Icon size={16} className="text-emerald-400" />
-                  <span>{item.label}</span>
+                  {/* Hexagon wireframe behind on hover */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <motion.div
+                      initial={false}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                      className="absolute w-12 h-12 border border-emerald-500/20"
+                      style={{ clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)' }}
+                    />
+                  </div>
+                  {/* Glow ripple on hover */}
+                  <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{ animation: 'cosmic-hover-glow 1.5s ease-in-out infinite' }}
+                  />
+                  <Icon size={16} className="text-emerald-400 relative z-10" />
+                  <span className="relative z-10">{item.label}</span>
                 </motion.button>
               );
             })}
