@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // ================================================================
 //  نظام الأستاذ — Gemini 1.5 Pro + DeepSeek-V3 للبحث العميق
 //  يُرجع نصاً تحليلياً + خريطة ذهنية بصيغة Mermaid.js
-//  بدون الاعتماد على z-ai-web-dev-sdk
+//  يعتمد على z-ai-web-dev-sdk كاحتياطي مضمون
 // ================================================================
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
@@ -75,7 +75,30 @@ async function callDeepSeek(systemPrompt: string, userMessage: string): Promise<
 }
 
 /**
- * استدعاء ذكي — يحاول Gemini أولاً (أفضل للتحليل) ثم DeepSeek
+ * استدعاء عبر z-ai-web-dev-sdk (احتياطي مضمون)
+ */
+async function callZAI(systemPrompt: string, userMessage: string): Promise<string> {
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: 4096,
+    });
+    const text = completion?.choices?.[0]?.message?.content;
+    if (!text) throw new Error('لم يتم الحصول على رد من z-ai-web-dev-sdk');
+    return text;
+  } catch (e: any) {
+    throw new Error(`z-ai-web-dev-sdk error: ${e.message}`);
+  }
+}
+
+/**
+ * استدعاء ذكي — يحاول Gemini أولاً ثم DeepSeek ثم z-ai-web-dev-sdk
  */
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
   // محاولة Gemini أولاً (أفضل للخرائط الذهنية والتحليل العميق)
@@ -91,9 +114,16 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
     try {
       return await callDeepSeek(systemPrompt, userMessage);
     } catch (e: any) {
-      console.warn('DeepSeek API failed:', e.message);
+      console.warn('DeepSeek API failed, falling back to z-ai-web-dev-sdk:', e.message);
     }
   }
+  // محاولة z-ai-web-dev-sdk كاحتياطي مضمون
+  try {
+    return await callZAI(systemPrompt, userMessage);
+  } catch (e: any) {
+    console.warn('z-ai-web-dev-sdk failed:', e.message);
+  }
+
   throw new Error('فشل في الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API في Vercel.');
 }
 
@@ -180,7 +210,7 @@ mindmap
       userMessage = `السياق / المحتوى المرجعي:\n${context.trim()}\n\n---\n\nالسؤال: ${question.trim()}`;
     }
 
-    // Call AI (Gemini first, then DeepSeek)
+    // Call AI (Gemini first, then DeepSeek, then z-ai-web-dev-sdk)
     const fullResponse = await callAI(systemPrompt, userMessage);
 
     // Extract Mermaid mind map

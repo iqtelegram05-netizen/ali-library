@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 //  نظام الملخص — DeepSeek-V3 للتلخيص الدقيق
 //  يُلخِّص محتوى الكتب بناءً على النص المزود فقط
 //  يمنع إضافة أي معلومة خارجية
+//  مع z-ai-web-dev-sdk كاحتياطي مضمون
 // ================================================================
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-dbbe1b253b454598b3d7a5294701a96a';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 const SYSTEM_PROMPT = `أنت مساعد في مكتبة العلي الرقمية. وظيفتك التلخيص فقط بناءً على النص المزود إليك أدناه. يمنع منعاً باتاً إضافة أي معلومة خارجية أو تاريخية ليست موجودة في النص المرفق. إذا لم تجد الإجابة في النص، قل: المعلومات غير متوفرة في هذا المصدر.`;
@@ -15,6 +16,8 @@ const SYSTEM_PROMPT = `أنت مساعد في مكتبة العلي الرقمي
  * استدعاء DeepSeek-V3 API
  */
 async function callDeepSeek(userMessage: string): Promise<string> {
+  if (!DEEPSEEK_API_KEY) throw new Error('مفتاح DeepSeek غير مضبوط');
+
   const res = await fetch(DEEPSEEK_BASE_URL, {
     method: 'POST',
     headers: {
@@ -42,6 +45,29 @@ async function callDeepSeek(userMessage: string): Promise<string> {
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error('لم يتم الحصول على رد من DeepSeek');
   return text;
+}
+
+/**
+ * استدعاء عبر z-ai-web-dev-sdk (احتياطي مضمون)
+ */
+async function callZAI(userMessage: string): Promise<string> {
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    });
+    const text = completion?.choices?.[0]?.message?.content;
+    if (!text) throw new Error('لم يتم الحصول على رد');
+    return text;
+  } catch (e: any) {
+    throw new Error(`z-ai-web-dev-sdk error: ${e.message}`);
+  }
 }
 
 // === MAIN HANDLER ===
@@ -72,8 +98,19 @@ export async function POST(req: NextRequest) {
       userMessage = `النص التالي مأخوذ من المصدر: ${url}\n\nقم بتلخيص النص التالي بشكل مختصر ومنظم:\n\n---\n${text.trim()}\n---`;
     }
 
-    // Call DeepSeek
-    const summary = await callDeepSeek(userMessage);
+    // Try DeepSeek first, then z-ai-web-dev-sdk
+    let summary = '';
+    if (DEEPSEEK_API_KEY) {
+      try {
+        summary = await callDeepSeek(userMessage);
+      } catch (e: any) {
+        console.warn('DeepSeek summary failed, falling back to z-ai-web-dev-sdk:', e.message);
+      }
+    }
+
+    if (!summary) {
+      summary = await callZAI(userMessage);
+    }
 
     return NextResponse.json({
       success: true,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // ================================================================
 //  AI Router — يعمل مباشرة مع DeepSeek و Gemini
-//  بدون الاعتماد على z-ai-web-dev-sdk
+//  مع z-ai-web-dev-sdk كاحتياطي مضمون
 // ================================================================
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
@@ -71,16 +71,38 @@ async function callGemini(systemPrompt: string, userMessage: string, temperature
 }
 
 /**
- * استدعاء ذكي — يحاول DeepSeek أولاً ثم Gemini
+ * استدعاء عبر z-ai-web-dev-sdk (احتياطي مضمون)
+ */
+async function callZAI(messages: Array<{role: string; content: string}>, temperature: number = 0.7, maxTokens: number = 4000): Promise<string> {
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    });
+    const text = completion?.choices?.[0]?.message?.content;
+    if (!text) throw new Error('لم يتم الحصول على رد من z-ai-web-dev-sdk');
+    return text;
+  } catch (e: any) {
+    throw new Error(`z-ai-web-dev-sdk error: ${e.message}`);
+  }
+}
+
+/**
+ * استدعاء ذكي — يحاول DeepSeek أولاً ثم Gemini ثم z-ai-web-dev-sdk
  */
 async function callAI(systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4000): Promise<string> {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage },
+  ];
+
   // محاولة DeepSeek أولاً
   if (DEEPSEEK_API_KEY) {
     try {
-      return await callDeepSeek([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ], temperature, maxTokens);
+      return await callDeepSeek(messages, temperature, maxTokens);
     } catch (e: any) {
       console.warn('DeepSeek failed, trying Gemini:', e.message);
     }
@@ -90,9 +112,16 @@ async function callAI(systemPrompt: string, userMessage: string, temperature: nu
     try {
       return await callGemini(systemPrompt, userMessage, temperature, maxTokens);
     } catch (e: any) {
-      console.warn('Gemini failed:', e.message);
+      console.warn('Gemini failed, trying z-ai-web-dev-sdk:', e.message);
     }
   }
+  // محاولة z-ai-web-dev-sdk كاحتياطي مضمون
+  try {
+    return await callZAI(messages, temperature, maxTokens);
+  } catch (e: any) {
+    console.warn('z-ai-web-dev-sdk failed:', e.message);
+  }
+
   throw new Error('فشل في الاتصال بخدمات الذكاء الاصطناعي. تأكد من ضبط مفاتيح API.');
 }
 
@@ -213,8 +242,16 @@ export async function POST(req: NextRequest) {
           const result = await callGemini(systemPrompt, userMessage, temperature, maxTokens);
           return NextResponse.json({ success: true, result });
         } catch (e: any) {
-          console.warn('Gemini thinker failed:', e.message);
+          console.warn('Gemini thinker failed, trying z-ai-web-dev-sdk:', e.message);
         }
+      }
+
+      // z-ai-web-dev-sdk كاحتياطي (يدعم سجل المحادثة)
+      try {
+        const result = await callZAI(apiMessages, temperature, maxTokens);
+        return NextResponse.json({ success: true, result });
+      } catch (e: any) {
+        console.warn('z-ai-web-dev-sdk thinker failed:', e.message);
       }
 
       return NextResponse.json({ error: 'فشل في الاتصال بخدمات الذكاء الاصطناعي' }, { status: 500 });
