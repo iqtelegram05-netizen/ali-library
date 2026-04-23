@@ -1223,7 +1223,7 @@ function SummarizerSection() {
               </div>
             ) : result ? (
               <div className="h-64 overflow-y-auto px-4 py-3 rounded-xl bg-[#111827]/50 border border-emerald-500/10">
-                <div className="prose prose-sm max-w-none text-gray-200 leading-relaxed whitespace-pre-wrap text-sm">{result}</div>
+                <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{result}</ReactMarkdown></div>
               </div>
             ) : (
               <div className="h-64 flex flex-col items-center justify-center text-gray-600 gap-2"><Sparkles size={40} /><span className="text-sm text-gray-500">ستظهر النتيجة هنا</span></div>
@@ -1303,7 +1303,7 @@ function ValidatorSection() {
               </div>
             ) : result ? (
               <div className="h-64 overflow-y-auto px-4 py-3 rounded-xl bg-[#111827]/50 border border-emerald-500/10">
-                <div className="prose prose-sm max-w-none text-gray-200 leading-relaxed whitespace-pre-wrap text-sm">{result}</div>
+                <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{result}</ReactMarkdown></div>
               </div>
             ) : (
               <div className="h-64 flex flex-col items-center justify-center text-gray-600 gap-2"><Shield size={40} /><span className="text-sm text-gray-500">ستظهر نتائج التدقيق هنا</span></div>
@@ -1377,7 +1377,7 @@ function ThinkerSection() {
                   <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`max-w-[85%] ${msg.role === 'user' ? 'mr-auto' : 'ml-auto'}`}>
                     <div className={`p-4 ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
                       {msg.role === 'assistant' && <div className="flex items-center gap-1.5 mb-2"><div className="p-1 rounded-full bg-emerald-500/10"><Brain size={12} className="text-emerald-400" /></div><span className="text-emerald-400 text-[11px] font-medium">المفكر الشيعي</span></div>}
-                      <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                      <div className="text-gray-200 text-sm leading-relaxed prose prose-sm max-w-none prose-invert prose-headings:text-emerald-300 prose-headings:font-bold prose-p:text-gray-300 prose-strong:text-[#D4AF37] prose-blockquote:border-emerald-500/30 prose-blockquote:text-gray-400 prose-li:text-gray-300 prose-hr:border-emerald-500/20"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
                     </div>
                   </motion.div>
                 ))}
@@ -1537,7 +1537,7 @@ function AdvancedSearchSection() {
           ) : results ? (
             <div className="rounded-xl bg-[#111827]/50 border border-emerald-500/10 p-5">
               <div className="flex items-center gap-2 mb-3"><CheckCircle2 size={16} className="text-emerald-400" /><span className="text-gray-200 text-sm font-medium">نتائج البحث الموضوعي</span></div>
-              <div className="prose prose-sm max-w-none text-gray-200 leading-relaxed whitespace-pre-wrap text-sm">{results}</div>
+              <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{results}</ReactMarkdown></div>
             </div>
           ) : null}
         </div>

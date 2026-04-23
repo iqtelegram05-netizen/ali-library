@@ -2,138 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
 // ================================================================
-//  AI Router — نظام التدوير الذكي (Key Rotation)
-//  مكتبة openai رسمية ↔ DeepSeek
-//  3 مفاتيح: DEEPSEEK_KEY_1 / DEEPSEEK_KEY_2 / DEEPSEEK_KEY_3
-//  انتقال تلقائي عند: 401 / 402 / 429 / timeout
+//  AI Router — Groq (llama-3.3-70b-versatile)
+//  مكتبة openai رسمية — اتصال مباشر وسريع
+//  المفتاح: process.env.GROQ_API_KEY
 // ================================================================
 
-const DEEPSEEK_BASE = 'https://api.deepseek.com';
-const MODEL = 'deepseek-chat';
+const GROQ_BASE = 'https://api.groq.com/openai/v1';
+const MODEL = 'llama-3.3-70b-versatile';
 
-// مؤشر التدوير
-let keyIdx = 0;
-
-// ---------------------------------------------------------------
-//  جلب مصفوفة المفاتيح من Vercel + Debug
-// ---------------------------------------------------------------
-function getKeys(): { key: string; label: string }[] {
-  const env = process.env;
-
-  const k1 = (env.DEEPSEEK_KEY_1 || '').trim();
-  const k2 = (env.DEEPSEEK_KEY_2 || '').trim();
-  const k3 = (env.DEEPSEEK_KEY_3 || '').trim();
-
-  const raw: { key: string; label: string }[] = [
-    { key: k1, label: 'DEEPSEEK_KEY_1' },
-    { key: k2, label: 'DEEPSEEK_KEY_2' },
-    { key: k3, label: 'DEEPSEEK_KEY_3' },
-  ];
-
-  // Debug: طباعة حالة كل مفتاح
-  for (const item of raw) {
-    if (!item.key) {
-      console.warn(`[Key Debug] المفتاح ${item.label} غير موجود في إعدادات Vercel`);
-    } else {
-      console.log(`[Key Debug] ${item.label} موجود (${item.key.slice(0, 8)}...${item.key.slice(-4)})`);
-    }
+function getClient(): OpenAI {
+  const apiKey = (process.env.GROQ_API_KEY || '').trim();
+  if (!apiKey) {
+    throw new Error('GROQ_API_KEY غير موجود في متغيرات Vercel');
   }
-
-  const valid = raw.filter(item => item.key.length > 0);
-  if (valid.length === 0) {
-    console.error('[Key Debug] لا يوجد أي مفتاح DeepSeek صالح في متغيرات Vercel!');
-  }
-
-  return valid;
+  return new OpenAI({ apiKey, baseURL: GROQ_BASE });
 }
 
-// ---------------------------------------------------------------
-//  إنشاء عميل OpenAI مرتبط بمفتاح معين
-// ---------------------------------------------------------------
-function createClient(apiKey: string): OpenAI {
-  return new OpenAI({
-    apiKey,
-    baseURL: DEEPSEEK_BASE,
-  });
-}
-
-// ---------------------------------------------------------------
-//  استدعاء DeepSeek بمفتاح واحد
-// ---------------------------------------------------------------
-async function callWithKey(
-  apiKey: string,
+async function callGroq(
   messages: Array<{ role: string; content: string }>,
   temperature: number = 0.7,
   maxTokens: number = 4096
 ): Promise<string> {
-  const client = createClient(apiKey);
-
+  const client = getClient();
   const response = await client.chat.completions.create({
     model: MODEL,
     messages: messages as any,
     temperature,
     max_tokens: maxTokens,
   });
-
   return response.choices[0]?.message?.content || '';
-}
-
-// ---------------------------------------------------------------
-//  استدعاء ذكي مع تدوير تلقائي
-// ---------------------------------------------------------------
-async function callSmart(
-  messages: Array<{ role: string; content: string }>,
-  temperature: number = 0.7,
-  maxTokens: number = 4096
-): Promise<{ result: string; keyLabel: string }> {
-  const keys = getKeys();
-
-  if (keys.length === 0) {
-    throw new Error('لا توجد مفاتيح DeepSeek. أضف DEEPSEEK_KEY_1 في متغيرات Vercel.');
-  }
-
-  const totalKeys = keys.length;
-  let attempts = 0;
-
-  while (attempts < totalKeys) {
-    const current = keys[(keyIdx + attempts) % totalKeys];
-    try {
-      console.log(`[Key Rotation] تجربة ${current.label} (محاولة ${attempts + 1}/${totalKeys})`);
-      const result = await callWithKey(current.key, messages, temperature, maxTokens);
-      keyIdx = (keyIdx + attempts + 1) % totalKeys; // تحريك المؤشر
-      console.log(`[Key Rotation] نجاح عبر ${current.label}`);
-      return { result, keyLabel: current.label };
-    } catch (error: any) {
-      const msg = error?.message || String(error);
-      console.error(`[Key Rotation] ${current.label} فشل: ${msg.slice(0, 300)}`);
-
-      // فحص نوع الخطأ: هل ننتقل للمفتاح التالي؟
-      const isRetryable =
-        msg.includes('401') ||
-        msg.includes('402') ||
-        msg.includes('Insufficient') ||
-        msg.includes('429') ||
-        msg.includes('quota') ||
-        msg.includes('rate') ||
-        msg.includes('timeout') ||
-        msg.includes('ECONNREFUSED') ||
-        msg.includes('fetch failed');
-
-      if (isRetryable && attempts < totalKeys - 1) {
-        console.log(`[Key Rotation] الانتقال للمفتاح التالي...`);
-        attempts++;
-      } else if (attempts < totalKeys - 1) {
-        // أخطاء غير معروفة — نحاول المفتاح التالي أيضاً
-        console.log(`[Key Rotation] خطأ غير متوقع، تجربة المفتاح التالي...`);
-        attempts++;
-      } else {
-        // آخر مفتاح فشل
-        throw new Error(`${current.label} فشل: ${msg.slice(0, 200)}`);
-      }
-    }
-  }
-
-  throw new Error('جميع المفاتيح فشلت.');
 }
 
 // ================================================================
@@ -164,7 +61,8 @@ export async function POST(req: NextRequest) {
 - تفنّد الشبهات بالدليل والبرهان
 - لغتك عربية فصيحة بليغة
 - محترم وحكيم في الرد
-- تراعي الأدب الإسلامي في الحوار`;
+- تراعي الأدب الإسلامي في الحوار
+- استخدم تنسيق Markdown في ردودك: عناوين فرعية، نقاط مرقمة، اقتباسات بالخط العريض، فواصل أفقية عند الحاجة`;
         userContent = typeof content === 'string' ? content : JSON.stringify(content);
         temperature = 0.7;
         break;
@@ -180,7 +78,8 @@ export async function POST(req: NextRequest) {
 - رتب الأفكار بترتيب منطقي واضح
 - احفظ الأحاديث والآيات كما وردت في النص كاملة
 - لغتك عربية فصيحة واضحة ومنظمة
-- إذا كان النص فارغاً أو قصيراً، قل فقط: النص غير كافٍ للتلخيص`;
+- إذا كان النص فارغاً أو قصيراً، قل فقط: النص غير كافٍ للتلخيص
+- استخدم Markdown في التلخيص: عناوين فرعية ونقاط مرقمة`;
         userContent = content;
         temperature = 0.3;
         maxTokens = 4000;
@@ -195,7 +94,8 @@ export async function POST(req: NextRequest) {
 5. اقتراح تحسينات هيكلية وعلمية
 6. الإشارة إلى أي قصور في التوثيق أو الاستدلال
 7. تقديم بدائل أكثر قوة للادعاءات الضعيفة
-أجب باللغة العربية بطريقة أكاديمية مهنية.`;
+أجب باللغة العربية بطريقة أكاديمية مهنية.
+استخدم Markdown لتنظيم الرد: عناوين، نقاط، اقتباسات بالخط العريض، فواصل.`;
         userContent = content;
         temperature = 0.5;
         break;
@@ -207,7 +107,8 @@ export async function POST(req: NextRequest) {
 2. تقديم نتائج بحث متعلقة بالموضوع المطروح
 3. ربط المفاهيم المتقاربة والمنهجية
 4. اقتراح مصادر ومراجع ذات صلة
-5. تنظيم النتائج في تصنيفات واضحة`;
+5. تنظيم النتائج في تصنيفات واضحة
+استخدم Markdown لتنظيم النتائج بشكل واضح ومنظم.`;
         userContent = content;
         temperature = 0.5;
         break;
@@ -235,21 +136,21 @@ export async function POST(req: NextRequest) {
 
     apiMessages.push({ role: 'user', content: userContent });
 
-    // الاستدعاء الذكي مع التدوير
+    // الاستدعاء المباشر — بدون أي انتظار
     try {
-      const { result, keyLabel } = await callSmart(apiMessages, temperature, maxTokens);
+      const result = await callGroq(apiMessages, temperature, maxTokens);
 
       if (action === 'categorize') {
         const jsonMatch = result.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]), keyLabel });
+          return NextResponse.json({ success: true, result: JSON.parse(jsonMatch[0]) });
         }
-        return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 }, keyLabel });
+        return NextResponse.json({ success: true, result: { category: 'أخرى', confidence: 0.3 } });
       }
 
-      return NextResponse.json({ success: true, result, keyLabel });
+      return NextResponse.json({ success: true, result });
     } catch (e: any) {
-      console.error(`[${action}] فشل النهائي:`, e.message);
+      console.error(`[${action}] Groq error:`, e.message);
       return NextResponse.json({ success: false, error: e.message });
     }
   } catch (error: any) {
