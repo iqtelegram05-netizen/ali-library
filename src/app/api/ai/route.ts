@@ -28,13 +28,26 @@ async function callDeepSeek(apiKey: string, messages: Array<{role: string; conte
 async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, temperature: number = 0.7, maxTokens: number = 4096): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     systemInstruction: systemPrompt,
     generationConfig: { temperature, maxOutputTokens: maxTokens },
   });
   const result = await model.generateContent(userMessage);
   const response = result.response;
   return response.text();
+}
+
+// استخراج وقت إعادة المحاولة من خطأ 429
+function extractRetrySeconds(error: any): number {
+  const msg = error?.message || String(error);
+  // البحث عن "retry in Xs" أو "retryDelay":"Xs"
+  const match1 = msg.match(/retry\s+in\s+([\d.]+)s/i);
+  if (match1) return Math.ceil(parseFloat(match1[1]));
+  const match2 = msg.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+  if (match2) return parseInt(match2[1]);
+  const match3 = msg.match(/Please retry in ([\d.]+)s/);
+  if (match3) return Math.ceil(parseFloat(match3[1]));
+  return 15; // افتراضي
 }
 
 export async function POST(req: NextRequest) {
@@ -137,8 +150,15 @@ export async function POST(req: NextRequest) {
         const result = await callGemini(GEMINI_API_KEY, systemPrompt, promptText, temperature, maxTokens);
         return NextResponse.json({ success: true, result });
       } catch (e: any) {
+        const is429 = (e?.message || '').includes('429') || (e?.message || '').includes('quota');
+        const retryAfter = is429 ? extractRetrySeconds(e) : 0;
         console.error('Thinker (Gemini) error:', e);
-        return NextResponse.json({ success: false, error: `خطأ Gemini: ${e.message}` });
+        return NextResponse.json({
+          success: false,
+          error: is429 ? `وصلت للحصة المجانية. يرجى الانتظار ${retryAfter} ثانية ثم حاول مرة أخرى.` : `خطأ Gemini: ${e.message}`,
+          retryAfter,
+          quotaExceeded: is429,
+        }, { status: 429 });
       }
     }
 
@@ -169,8 +189,15 @@ export async function POST(req: NextRequest) {
         const result = await callGemini(GEMINI_API_KEY, systemPrompt, userContent, temperature, maxTokens);
         return NextResponse.json({ success: true, result });
       } catch (e: any) {
+        const is429 = (e?.message || '').includes('429') || (e?.message || '').includes('quota');
+        const retryAfter = is429 ? extractRetrySeconds(e) : 0;
         console.error(`${action} (Gemini) error:`, e);
-        return NextResponse.json({ success: false, error: `خطأ Gemini: ${e.message}` });
+        return NextResponse.json({
+          success: false,
+          error: is429 ? `وصلت للحصة المجانية. يرجى الانتظار ${retryAfter} ثانية ثم حاول مرة أخرى.` : `خطأ Gemini: ${e.message}`,
+          retryAfter,
+          quotaExceeded: is429,
+        }, { status: 429 });
       }
     }
 
