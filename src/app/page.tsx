@@ -1163,6 +1163,9 @@ function SummarizerSection() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const lastRequestTime = useRef(0);
+  const cooldownTimer = useRef<NodeJS.Timeout | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1170,12 +1173,42 @@ function SummarizerSection() {
   };
 
   const handleSummarize = async () => {
-    if (!text.trim()) return; setLoading(true); setResult('');
+    if (!text.trim() || text.trim().length < 50) {
+      setResult('يرجى كتابة نص أطول (50 حرف على الأقل) قبل التلخيص.');
+      return;
+    }
+
+    // فاصل 3 ثوانٍ
+    const now = Date.now();
+    const elapsed = now - lastRequestTime.current;
+    if (elapsed < 3000) {
+      const waitSec = Math.ceil((3000 - elapsed) / 1000);
+      setCooldown(waitSec);
+      setResult(`يرجى المحاولة بعد ${waitSec} ثوانٍ، النظام قيد المعالجة`);
+      if (cooldownTimer.current) clearInterval(cooldownTimer.current);
+      cooldownTimer.current = setInterval(() => {
+        setCooldown(prev => {
+          if (prev <= 1) { clearInterval(cooldownTimer.current!); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+      return;
+    }
+
+    lastRequestTime.current = now;
+    setLoading(true); setResult('');
+
     try {
-      const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'summarize', content: text }) });
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'summarize', content: text }),
+      });
       const data = await res.json();
-      setResult(data.success ? data.result : 'حدث خطأ: ' + (data.error || ''));
-    } catch { setResult('فشل الاتصال بالخادم. حاول مرة أخرى.'); }
+      setResult(data.success ? data.result : (data.error || 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة'));
+    } catch {
+      setResult('يرجى المحاولة بعد لحظات، النظام قيد المعالجة');
+    }
     setLoading(false);
   };
 
@@ -1307,18 +1340,39 @@ function ThinkerSection() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const lastRequestTime = useRef(0);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
+
+    // منع الطلبات الفارغة
+    if (input.trim().length < 3) return;
+
+    // فاصل 3 ثوانٍ
+    const now = Date.now();
+    const elapsed = now - lastRequestTime.current;
+    if (elapsed < 3000) {
+      const waitSec = Math.ceil((3000 - elapsed) / 1000);
+      setMessages(prev => [...prev, { id: (Date.now()).toString(), role: 'assistant', content: `يرجى المحاولة بعد ${waitSec} ثوانٍ، النظام قيد المعالجة` }]);
+      return;
+    }
+
+    lastRequestTime.current = now;
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
     setMessages(prev => [...prev, userMsg]); setInput(''); setLoading(true);
     try {
       const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'thinker', content: input.trim(), messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) }) });
       const data = await res.json();
-      if (data.success) setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.result }]);
-    } catch { setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'عذراً، حدث خطأ في الاتصال. حاول مرة أخرى.' }]); }
+      if (data.success) {
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.result }]);
+      } else {
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.error || 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }]);
+      }
+    } catch {
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'يرجى المحاولة بعد لحظات، النظام قيد المعالجة' }]);
+    }
     setLoading(false);
   };
 
