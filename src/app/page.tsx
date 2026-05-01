@@ -121,9 +121,7 @@ const NAV_ITEMS = [
   { id: 'hero', label: 'الرئيسية', icon: Globe },
   { id: 'fetch-engine', label: 'إحضار الكتب', icon: BookType },
   { id: 'books-archive', label: 'الكتب', icon: Library },
-  { id: 'summarizer', label: 'المُلخِّص', icon: Sparkles },
-  { id: 'validator', label: 'تدقيق البحوث', icon: Shield },
-  { id: 'thinker', label: 'المفكر الشيعي', icon: Brain },
+  { id: 'teacher', label: 'الأستاذ', icon: Bot },
   { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
   { id: 'search', label: 'البحث المتطور', icon: Search },
 ];
@@ -131,9 +129,7 @@ const NAV_ITEMS = [
 const HERO_BUTTONS = [
   { icon: BookType, label: 'إحضار الكتب', section: 'fetch-engine' },
   { icon: Library, label: 'الكتب', section: 'books-archive' },
-  { icon: Sparkles, label: 'المُلخِّص', section: 'summarizer' },
-  { icon: Shield, label: 'تدقيق البحوث', section: 'validator' },
-  { icon: Brain, label: 'المفكر الشيعي', section: 'thinker' },
+  { icon: Bot, label: 'الأستاذ', section: 'teacher' },
   { icon: Heart, label: 'سيرة آل محمد', section: 'biography' },
   { icon: Search, label: 'البحث المتطور', section: 'search' },
 ];
@@ -267,23 +263,7 @@ export default function Home() {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <SummarizerSection />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <ValidatorSection />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <ThinkerSection />
+          <TeacherSection />
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 60 }}
@@ -1155,172 +1135,18 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
 }
 
 /* ===================================================================
-   SUMMARIZER SECTION
+   TEACHER SECTION — الأستاذ (Gemini 1.5 Pro + Mermaid Mind Maps)
    =================================================================== */
 
-function SummarizerSection() {
-  const [text, setText] = useState('');
-  const [result, setResult] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [fileName, setFileName] = useState('');
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { setFileName(file.name); const reader = new FileReader(); reader.onload = (event) => setText(event.target?.result as string); reader.readAsText(file); }
-  };
-
-  const handleSummarize = async () => {
-    if (!text.trim() || loading) return;
-    setLoading(true); setResult('');
-    try {
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'summarize', content: text }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setResult(data.result);
-      } else {
-        setResult(data.error || 'حدث خطأ غير معروف');
-      }
-    } catch (e: any) {
-      setResult(`خطأ في الاتصال: ${e.message}`);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <section id="summarizer" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
-      <div className="max-w-5xl mx-auto">
-        <SectionHeader icon={Sparkles} title="وحدة الأستاذ الذكي" subtitle="ارفع صفحات أو أبواب كاملة من الكتب ليقوم الذكاء الاصطناعي بتلخيصها واستخراج زبدة المطالب" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl shadow-lg shadow-black/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-200 text-sm font-medium flex items-center gap-2"><Upload size={16} /><span>إدخال النص</span></h3>
-              <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-[#111827] border border-emerald-500/15 text-gray-300 text-xs hover:border-emerald-500/25 transition-colors flex items-center gap-1">
-                <FileText size={12} /><span>رفع ملف</span>
-                <input type="file" accept=".txt,.md,.pdf" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-            {fileName && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/15 mb-3"><FileText size={14} className="text-emerald-400" /><span className="text-gray-300 text-xs truncate">{fileName}</span></div>}
-            <textarea value={text} onChange={e => setText(e.target.value)} placeholder="الصق هنا النص المراد تلخيصه..." className="w-full h-64 px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all resize-none leading-relaxed" />
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-gray-500 text-[11px]">{text.length} حرف</span>
-              <button onClick={handleSummarize} disabled={loading || !text.trim()} className="btn-green px-5 py-2.5 rounded-xl text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50 transition-all">
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                <span>{loading ? 'جارٍ التلخيص...' : 'تلخيص الآن'}</span>
-              </button>
-            </div>
-          </div>
-          <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl shadow-lg shadow-black/20">
-            <div className="flex items-center gap-2 mb-4"><Eye size={16} className="text-emerald-400" /><h3 className="text-gray-200 text-sm font-medium">النتيجة</h3></div>
-            {loading ? (
-              <div className="h-64 flex flex-col items-center justify-center gap-3 text-gray-400">
-                <Loader2 size={32} className="animate-spin text-emerald-400" /><span className="text-sm">جارٍ التحليل والتلخيص...</span>
-                <div className="flex gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /></div>
-              </div>
-            ) : result ? (
-              <div className="h-64 overflow-y-auto px-4 py-3 rounded-xl bg-[#111827]/50 border border-emerald-500/10">
-                <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{result}</ReactMarkdown></div>
-              </div>
-            ) : (
-              <div className="h-64 flex flex-col items-center justify-center text-gray-600 gap-2"><Sparkles size={40} /><span className="text-sm text-gray-500">ستظهر النتيجة هنا</span></div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+interface TeacherMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  mindmap?: string;
 }
 
-/* ===================================================================
-   RESEARCH VALIDATOR SECTION
-   =================================================================== */
-
-function ValidatorSection() {
-  const [research, setResearch] = useState('');
-  const [result, setResult] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [fileName, setFileName] = useState('');
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { setFileName(file.name); const reader = new FileReader(); reader.onload = (event) => setResearch(event.target?.result as string); reader.readAsText(file); }
-  };
-
-  const handleValidate = async () => {
-    if (!research.trim()) return; setLoading(true); setResult('');
-    try {
-      const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'validate', content: research }) });
-      const data = await res.json();
-      if (data.success) {
-        setResult(data.result);
-      } else {
-        setResult(`خطأ: ${data.error || 'غير معروف'}`);
-      }
-    } catch (e: any) {
-      setResult(`خطأ في الاتصال: ${e.message}`);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <section id="validator" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
-      <div className="max-w-5xl mx-auto">
-        <SectionHeader icon={Shield} title="تدقيق البحوث - Research Validator" subtitle="بوابة لرفع البحوث الدينية، مقارنتها بالمصادر الأصلية، تعديل الأخطاء، وإضافة أدلة وقرائن أقوى" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl shadow-lg shadow-black/20">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-200 text-sm font-medium flex items-center gap-2"><Upload size={16} /><span>رفع البحث</span></h3>
-              <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-[#111827] border border-emerald-500/15 text-gray-300 text-xs hover:border-emerald-500/25 transition-colors flex items-center gap-1">
-                <FileText size={12} /><span>رفع ملف</span>
-                <input type="file" accept=".txt,.md,.doc,.docx" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-            {fileName && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/15 mb-3"><FileText size={14} className="text-emerald-400" /><span className="text-gray-300 text-xs truncate">{fileName}</span></div>}
-            <textarea value={research} onChange={e => setResearch(e.target.value)} placeholder="الصق البحث أو ارفعه هنا..." className="w-full h-64 px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all resize-none leading-relaxed" />
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex gap-2">
-                <span className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400/70 text-[10px] border border-emerald-500/15">مقارنة بالمصادر</span>
-                <span className="px-2 py-1 rounded-md bg-[#D4AF37]/10 text-[#D4AF37]/70 text-[10px] border border-[#D4AF37]/15">تصحيح الأخطاء</span>
-                <span className="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400/70 text-[10px] border border-emerald-500/15">تقوية الأدلة</span>
-              </div>
-              <button onClick={handleValidate} disabled={loading || !research.trim()} className="btn-green px-5 py-2.5 rounded-xl text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50 transition-all">
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
-                <span>{loading ? 'جارٍ التدقيق...' : 'تدقيق البحث'}</span>
-              </button>
-            </div>
-          </div>
-          <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl shadow-lg shadow-black/20">
-            <div className="flex items-center gap-2 mb-4"><CheckCircle2 size={16} className="text-emerald-400" /><h3 className="text-gray-200 text-sm font-medium">نتائج التدقيق</h3></div>
-            {loading ? (
-              <div className="h-64 flex flex-col items-center justify-center gap-3 text-gray-400">
-                <Loader2 size={32} className="animate-spin text-emerald-400" /><span className="text-sm">جارٍ التحليل والمقارنة بالمصادر...</span>
-                <div className="flex gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /></div>
-              </div>
-            ) : result ? (
-              <div className="h-64 overflow-y-auto px-4 py-3 rounded-xl bg-[#111827]/50 border border-emerald-500/10">
-                <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{result}</ReactMarkdown></div>
-              </div>
-            ) : (
-              <div className="h-64 flex flex-col items-center justify-center text-gray-600 gap-2"><Shield size={40} /><span className="text-sm text-gray-500">ستظهر نتائج التدقيق هنا</span></div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ===================================================================
-   SHIA THINKER AI SECTION
-   =================================================================== */
-
-function ThinkerSection() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+function TeacherSection() {
+  const [messages, setMessages] = useState<TeacherMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -1329,45 +1155,68 @@ function ThinkerSection() {
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
-    setMessages(prev => [...prev, userMsg]); setInput(''); setLoading(true);
+    const userMsg: TeacherMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+
     try {
-      const res = await fetch('/api/ai', {
+      const res = await fetch('/api/teacher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'thinker', content: input.trim(), messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ question: input.trim(), messages: messages.map(m => ({ role: m.role, content: m.content })) }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.result }]);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.answer || '',
+          mindmap: data.mindmap || '',
+        }]);
       } else {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.error || 'حدث خطأ' }]);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.error || 'حدث خطأ',
+        }]);
       }
     } catch (e: any) {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: `خطأ في الاتصال: ${e.message}` }]);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `خطأ في الاتصال: ${e.message}`,
+      }]);
     }
     setLoading(false);
   };
 
-  const suggestedQuestions = ['ما هي أدلة الإمامة من القرآن الكريم؟', 'ما الفرق بين التشيع والفرق الإسلامية الأخرى؟', 'ما معنى الغيبة الصغرى والكبرى؟', 'شرح فلسفي لمسألة التوحيد'];
+  const suggestedQuestions = [
+    'ما هي أدلة الإمامة من القرآن الكريم؟',
+    'اشرح مسألة التوحيد بتفصيل مع خريطة ذهنية',
+    'ما الفرق بين التشيع والفرق الإسلامية الأخرى؟',
+    'وضح فلسفة العدل الإلهي في الفكر الشيعي',
+  ];
 
   return (
-    <section id="thinker" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+    <section id="teacher" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="section-divider mb-20" />
       <div className="max-w-4xl mx-auto">
-        <SectionHeader icon={Brain} title="المفكر الشيعي AI" subtitle="محاور عقائدي وفلسفي لتحليل النصوص العميقة وتفكيك الشبهات بالحجة والمنطق" />
+        <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم ذكي يعتمد على Gemini 1.5 Pro — يقدم إجابات عميقة مع خرائط ذهنية تفاعلية" />
         <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-8 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/20">
-          <div className="h-96 overflow-y-auto p-4 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
+          <div className="h-[500px] overflow-y-auto p-4 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center gap-4">
-                <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/15"><Brain size={40} className="text-emerald-400" /></div>
+                <div className="p-4 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/20">
+                  <Bot size={40} className="text-[#D4AF37]" />
+                </div>
                 <div>
-                  <p className="text-gray-100 font-medium mb-2">المفكر الشيعي AI</p>
-                  <p className="text-gray-500 text-sm max-w-md">مرحباً بك. أنا محاور متخصص في العقيدة والفلسفة الإسلامية. اسألني أي سؤال عقائدي أو فكري.</p>
+                  <p className="text-gray-100 font-medium mb-2">الأستاذ الذكي</p>
+                  <p className="text-gray-500 text-sm max-w-md">مرحباً بك. أنا معلمك الذكي المتخصص في الدراسات الإسلامية والفكر الشيعي. اسألني وسأقدم لك إجابة مفصلة مع خريطة ذهنية تفاعلية.</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4 w-full max-w-lg">
                   {suggestedQuestions.map((q, i) => (
-                    <button key={i} onClick={() => setInput(q)} className="px-3 py-2 rounded-lg bg-[#0d1117] border border-emerald-500/15 text-gray-300 text-xs hover:border-emerald-500/30 transition-all text-right">{q}</button>
+                    <button key={i} onClick={() => setInput(q)} className="px-3 py-2 rounded-lg bg-[#0d1117] border border-[#D4AF37]/15 text-gray-300 text-xs hover:border-[#D4AF37]/30 transition-all text-right">{q}</button>
                   ))}
                 </div>
               </div>
@@ -1376,16 +1225,41 @@ function ThinkerSection() {
                 {messages.map((msg) => (
                   <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`max-w-[85%] ${msg.role === 'user' ? 'mr-auto' : 'ml-auto'}`}>
                     <div className={`p-4 ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
-                      {msg.role === 'assistant' && <div className="flex items-center gap-1.5 mb-2"><div className="p-1 rounded-full bg-emerald-500/10"><Brain size={12} className="text-emerald-400" /></div><span className="text-emerald-400 text-[11px] font-medium">المفكر الشيعي</span></div>}
-                      <div className="text-gray-200 text-sm leading-relaxed prose prose-sm max-w-none prose-invert prose-headings:text-emerald-300 prose-headings:font-bold prose-p:text-gray-300 prose-strong:text-[#D4AF37] prose-blockquote:border-emerald-500/30 prose-blockquote:text-gray-400 prose-li:text-gray-300 prose-hr:border-emerald-500/20"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
+                      {msg.role === 'assistant' && (
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <div className="p-1 rounded-full bg-[#D4AF37]/10">
+                            <Bot size={12} className="text-[#D4AF37]" />
+                          </div>
+                          <span className="text-[#D4AF37] text-[11px] font-medium">الأستاذ الذكي</span>
+                        </div>
+                      )}
+                      <div className="text-gray-200 text-sm leading-relaxed prose prose-sm max-w-none prose-invert prose-headings:text-emerald-300 prose-headings:font-bold prose-p:text-gray-300 prose-strong:text-[#D4AF37] prose-blockquote:border-emerald-500/30 prose-blockquote:text-gray-400 prose-li:text-gray-300 prose-hr:border-emerald-500/20">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                      {msg.mindmap && (
+                        <div className="mt-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Sparkles size={14} className="text-emerald-400" />
+                            <span className="text-emerald-400 text-xs font-medium">الخريطة الذهنية</span>
+                          </div>
+                          <MermaidRenderer chart={msg.mindmap} />
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 ))}
                 {loading && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-[85%] ml-auto">
                     <div className="chat-ai p-4">
-                      <div className="flex items-center gap-1.5 mb-2"><div className="p-1 rounded-full bg-emerald-500/10"><Brain size={12} className="text-emerald-400" /></div><span className="text-emerald-400 text-[11px] font-medium">المفكر الشيعي</span></div>
-                      <div className="flex gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /></div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="p-1 rounded-full bg-[#D4AF37]/10"><Bot size={12} className="text-[#D4AF37]" /></div>
+                        <span className="text-[#D4AF37] text-[11px] font-medium">الأستاذ الذكي</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
+                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
+                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1396,7 +1270,7 @@ function ThinkerSection() {
           <div className="border-t border-emerald-500/10 p-4 bg-[#0d1117]">
             <div className="flex gap-3">
               <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="اكتب سؤالك العقائدي أو الفلسفي هنا..."
+                placeholder="اسأل الأستاذ أي سؤال حول الدراسات الإسلامية..."
                 className="flex-1 px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all resize-none leading-relaxed" rows={1} style={{ minHeight: '44px', maxHeight: '120px' }} />
               <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-green p-3 rounded-xl text-white disabled:opacity-50 transition-all shrink-0">
                 <Send size={18} />

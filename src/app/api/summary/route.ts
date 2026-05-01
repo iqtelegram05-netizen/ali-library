@@ -1,25 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 
 // ================================================================
-//  نظام الأستاذ (الملخص) — Groq (llama-3.3-70b-versatile)
-//  اتصال مباشر وسريع بدون أي تأخير
+//  نظام الملخص — DeepSeek-V3
+//  ملخص صارم يلتزم بالنص حرفياً — لا يضيف أي معلومة خارجية
 // ================================================================
 
-const GROQ_BASE = 'https://api.groq.com/openai/v1';
-const MODEL = 'llama-3.3-70b-versatile';
-
-function getClient(): OpenAI {
-  const apiKey = (process.env.GROQ_API_KEY || '').trim();
-  if (!apiKey) {
-    throw new Error('GROQ_API_KEY غير موجود في متغيرات Vercel');
-  }
-  if (!apiKey.startsWith('gsk_')) {
-    console.warn(`[Groq] تحذير: المفتاح لا يبدأ بـ gsk_ — يبدأ بـ: ${apiKey.substring(0, 7)}...`);
-  }
-  console.log(`[Groq Summary] المفتاح موجود، الطول: ${apiKey.length} حرف، البداية: ${apiKey.substring(0, 7)}...`);
-  return new OpenAI({ apiKey, baseURL: GROQ_BASE });
-}
+const DEEPSEEK_BASE = 'https://api.deepseek.com/v1/chat/completions';
+const DEEPSEEK_API_KEY = 'sk-dbbe1b253b454598b3d7a5294701a96a';
 
 const SYSTEM_PROMPT = `أنت ملخص صارم للنصوص الدينية والفكرية.
 قاعدة ذهبية: يمنع منعاً باتاً إضافة أي معلومة من عندك.
@@ -47,22 +34,38 @@ export async function POST(req: NextRequest) {
       ? `النص مأخوذ من: ${url}\n\nقم بتلخيص النص التالي:\n\n---\n${text.trim()}\n---`
       : `قم بتلخيص النص التالي:\n\n---\n${text.trim()}\n---`;
 
-    const client = getClient();
-
-    const response = await client.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ] as any,
-      temperature: 0.3,
-      max_tokens: 2048,
+    const response = await fetch(DEEPSEEK_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userMessage },
+        ],
+        temperature: 0.3,
+        max_tokens: 4096,
+      }),
+      signal: AbortSignal.timeout(120000),
     });
 
-    const summary = response.choices[0]?.message?.content || '';
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Summary API] DeepSeek error:', response.status, errorText);
+      return NextResponse.json({
+        success: false,
+        error: `خطأ من DeepSeek API: ${response.status}`,
+      });
+    }
+
+    const data = await response.json();
+    const summary = data?.choices?.[0]?.message?.content || '';
 
     if (!summary) {
-      return NextResponse.json({ success: false, error: 'Groq رد بنتيجة فارغة' });
+      return NextResponse.json({ success: false, error: 'DeepSeek رد بنتيجة فارغة' });
     }
 
     return NextResponse.json({
@@ -73,17 +76,7 @@ export async function POST(req: NextRequest) {
       summaryLength: summary.length,
     });
   } catch (error: any) {
-    const status = error?.status || error?.statusCode;
-    console.error('Summary API error:', `[${status}]`, error.message);
-
-    if (status === 401) {
-      return NextResponse.json({
-        success: false,
-        error: 'مفتاح Groq غير صالح. تأكد أن المفتاح في Vercel يبدأ بـ gsk_ وليس فيه مسافات.',
-        debug: 'تحقق من متغير GROQ_API_KEY في إعدادات Vercel → Settings → Environment Variables',
-      });
-    }
-
-    return NextResponse.json({ success: false, error: error.message });
+    console.error('[Summary API] Error:', error);
+    return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي' });
   }
 }
