@@ -4,13 +4,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
   Shield, ExternalLink, Send, FileText,
   BookMarked, Loader2, Menu, X, Star,
   ChevronLeft, ChevronRight, Heart, CheckCircle2, AlertTriangle,
   Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bot, Bug,
-  ChevronDown, Layers
+  ChevronDown, Layers, LogIn, LogOut, ShieldCheck
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -119,6 +120,14 @@ const IMAMS_DATA: ImamData[] = [
 
 const NAV_ITEMS = [
   { id: 'hero', label: 'الرئيسية', icon: Globe },
+  { id: 'books-archive', label: 'الكتب', icon: Library },
+  { id: 'teacher', label: 'الأستاذ', icon: Bot },
+  { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
+  { id: 'search', label: 'البحث المتطور', icon: Search },
+];
+
+const ADMIN_NAV_ITEMS = [
+  { id: 'hero', label: 'الرئيسية', icon: Globe },
   { id: 'fetch-engine', label: 'إحضار الكتب', icon: BookType },
   { id: 'books-archive', label: 'الكتب', icon: Library },
   { id: 'teacher', label: 'الأستاذ', icon: Bot },
@@ -139,40 +148,33 @@ const HERO_BUTTONS = [
    =================================================================== */
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const [activeSection, setActiveSection] = useState('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPortal, setShowPortal] = useState(true);
-  // === مخزن الكتب الدائم (Persistent Book Storage via localStorage) ===
-  const STORAGE_KEY = 'ali-library-books';
   const [books, setBooks] = useState<BookItem[]>([]);
   const [booksLoaded, setBooksLoaded] = useState(false);
 
-  // Load books from localStorage AFTER mount (avoids hydration mismatch)
-  useEffect(() => {
+  const userRole = (session?.user as any)?.role || 'user';
+  const isAdmin = userRole === 'owner' || userRole === 'admin';
+
+  // جلب الكتب من الخادم (عام للجميع)
+  const fetchBooks = useCallback(async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const restored = parsed.map((b: any) => ({ ...b, addedAt: new Date(b.addedAt) }));
-          setBooks(restored);
-        }
+      const res = await fetch('/api/books');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.books)) {
+        setBooks(data.books.map((b: any) => ({ ...b, addedAt: new Date(b.createdAt) })));
       }
     } catch (e) {
-      console.warn('Failed to load books from localStorage:', e);
+      console.warn('Failed to fetch books from API:', e);
     }
     setBooksLoaded(true);
   }, []);
 
-  // Save books to localStorage whenever they change (only after initial load)
   useEffect(() => {
-    if (!booksLoaded) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
-    } catch (e) {
-      console.warn('Failed to save books to localStorage:', e);
-    }
-  }, [books, booksLoaded]);
+    fetchBooks();
+  }, [fetchBooks]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -221,6 +223,8 @@ export default function Home() {
         scrollToSection={scrollToSection}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
+        session={session}
+        isAdmin={isAdmin}
       />
 
       {/* Mobile Menu Overlay */}
@@ -229,6 +233,7 @@ export default function Home() {
           <MobileMenu
             scrollToSection={scrollToSection}
             setMobileMenuOpen={setMobileMenuOpen}
+            isAdmin={isAdmin}
           />
         )}
       </AnimatePresence>
@@ -241,14 +246,17 @@ export default function Home() {
 
       {/* Main Content Sections */}
       <main className="relative z-10">
+        {/* قسم إحضار الكتب — فقط للمشرفين والمالك */}
+        {isAdmin && (
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <FetchEngineSection books={books} setBooks={setBooks} />
+          <FetchEngineSection books={books} setBooks={setBooks} onBooksAdded={fetchBooks} />
         </motion.div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -263,7 +271,7 @@ export default function Home() {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <TeacherSection />
+          <TeacherSection session={session} />
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 60 }}
@@ -294,13 +302,17 @@ export default function Home() {
    NAVIGATION
    =================================================================== */
 
-function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen }: {
+function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, session, isAdmin }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
+  session: any;
+  isAdmin: boolean;
 }) {
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+  const router = useRouter();
+  const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass-strong">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -313,7 +325,7 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             </div>
           </div>
           <div className="hidden lg:flex items-center gap-1">
-            {NAV_ITEMS.map(item => {
+            {navItems.map(item => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
               return (
@@ -325,7 +337,6 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
                   className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border overflow-hidden
                     ${isActive ? 'nav-active' : 'text-gray-400 hover:text-gray-100'}`}
                 >
-                  {/* Geometric hover background */}
                   <AnimatePresence>
                     {hoveredNav === item.id && !isActive && (
                       <motion.div
@@ -343,29 +354,70 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
                 </button>
               );
             })}
+            {/* Admin Dashboard Link */}
+            {isAdmin && (
+              <button
+                onClick={() => router.push('/admin')}
+                onMouseEnter={() => setHoveredNav('admin')}
+                onMouseLeave={() => setHoveredNav(null)}
+                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37]/10 overflow-hidden"
+              >
+                <ShieldCheck size={14} className="relative z-10" />
+                <span className="relative z-10">لوحة التحكم</span>
+              </button>
+            )}
           </div>
-          <button
-            className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Auth Button */}
+            {session?.user ? (
+              <div className="flex items-center gap-2">
+                {session.user.image && (
+                  <img src={session.user.image} alt="" className="w-7 h-7 rounded-full border border-emerald-500/30 hidden sm:block" />
+                )}
+                <button
+                  onClick={() => signOut()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                >
+                  <LogOut size={14} />
+                  <span className="hidden sm:inline">خروج</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => signIn('google')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
+              >
+                <LogIn size={14} />
+                <span className="hidden sm:inline">تسجيل الدخول</span>
+              </button>
+            )}
+            <button
+              className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
       </div>
     </nav>
   );
 }
 
-function MobileMenu({ scrollToSection, setMobileMenuOpen }: {
+function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
   scrollToSection: (id: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
+  isAdmin: boolean;
 }) {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
   return (
     <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed inset-0 z-40 lg:hidden">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
       <div className="absolute top-16 left-0 right-0 bg-[#0d1117]/95 backdrop-blur-xl border-b border-emerald-500/15 p-4">
         <div className="flex flex-col gap-1">
-          {NAV_ITEMS.map(item => {
+          {navItems.map(item => {
             const Icon = item.icon;
             return (
               <button key={item.id} onClick={() => scrollToSection(item.id)}
@@ -375,6 +427,28 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen }: {
               </button>
             );
           })}
+          {isAdmin && (
+            <button onClick={() => { router.push('/admin'); setMobileMenuOpen(false); }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#D4AF37] hover:bg-[#1a1a2e] transition-all text-sm font-medium w-full text-right">
+              <ShieldCheck size={18} />
+              <span>لوحة التحكم</span>
+            </button>
+          )}
+          <div className="border-t border-emerald-500/10 mt-2 pt-2">
+            {session?.user ? (
+              <button onClick={() => signOut()}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium w-full text-right">
+                <LogOut size={18} />
+                <span>تسجيل الخروج</span>
+              </button>
+            ) : (
+              <button onClick={() => signIn('google')}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-all text-sm font-medium w-full text-right">
+                <LogIn size={18} />
+                <span>تسجيل الدخول بحساب Google</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -577,7 +651,7 @@ function AboutSection() {
    BOOK FETCH ENGINE + BOOKS LIBRARY
    =================================================================== */
 
-function FetchEngineSection({ books, setBooks }: { books: BookItem[]; setBooks: React.Dispatch<React.SetStateAction<BookItem[]>> }) {
+function FetchEngineSection({ books, setBooks, onBooksAdded }: { books: BookItem[]; setBooks: React.Dispatch<React.SetStateAction<BookItem[]>>; onBooksAdded: () => void }) {
   const [bookName, setBookName] = useState('');
   const [bookUrl, setBookUrl] = useState('');
   const [error, setError] = useState('');
@@ -597,14 +671,27 @@ function FetchEngineSection({ books, setBooks }: { books: BookItem[]; setBooks: 
     router.push(`/reader?${params.toString()}`);
   }, [router]);
 
-  const validateAndAddBook = () => {
+  const validateAndAddBook = async () => {
     setError('');
     if (!bookName.trim()) { setError('يجب إدخال اسم الكتاب'); return; }
     setLoading(true);
-    setTimeout(() => {
-      setBooks(prev => [{ id: Date.now().toString(), name: bookName.trim(), url: bookUrl.trim() || '', addedAt: new Date(), category: 'other' }, ...prev]);
-      setBookName(''); setBookUrl(''); setLoading(false);
-    }, 800);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: bookName.trim(), url: bookUrl.trim() || '', category: 'other' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onBooksAdded();
+        setBookName(''); setBookUrl('');
+      } else {
+        setError(data.error || 'فشل في إضافة الكتاب');
+      }
+    } catch {
+      setError('فشل الاتصال بالخادم');
+    }
+    setLoading(false);
   };
 
   const handleSmartScrape = async () => {
@@ -682,41 +769,39 @@ function FetchEngineSection({ books, setBooks }: { books: BookItem[]; setBooks: 
     const selected = scrapedPdfs.filter(p => p.selected);
     if (selected.length === 0) return;
     setLoading(true);
-    const newBooks: BookItem[] = [];
+    let addedCount = 0;
     for (const pdf of selected) {
       const displayName = pdf.title || pdf.name || 'كتاب بدون عنوان';
       const bookUrl = pdf.url || '';
-      // تأكد من أن الرابط فريد ويشير لكتاب محدد (يحتوي رقم_)
       if (!bookUrl || (!/\d+_/.test(bookUrl) && !bookUrl.includes('shiaonlinelibrary'))) continue;
-      // تجنب إضافة نفس الرابط مرتين
-      if (newBooks.some(b => b.url === bookUrl)) continue;
-      newBooks.push({
-        id: Date.now().toString() + Math.random().toString(36).slice(2),
-        name: pdf.author ? `${displayName} — ${pdf.author}` : displayName,
-        url: bookUrl,
-        addedAt: new Date(),
-        category: pdf.category || 'other',
-        confidence: pdf.confidence,
-      });
-    }
-    if (newBooks.length > 0) {
-      setBooks(prev => {
-        // إزالة الكتب المكررة بناءً على الرابط
-        const existingUrls = new Set(prev.map(b => b.url));
-        const unique = newBooks.filter(b => !existingUrls.has(b.url));
-        return [...unique, ...prev];
-      });
+      try {
+        const res = await fetch('/api/books', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: pdf.author ? `${displayName} — ${pdf.author}` : displayName,
+            url: bookUrl,
+            category: pdf.category || 'other',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) addedCount++;
+      } catch { /* skip failed */ }
     }
     setScrapedPdfs([]);
     setShowScrapeResults(false);
     setScrapeUrl('');
     setScrapeError('');
     setLoading(false);
-    if (newBooks.length > 0) {
+    if (addedCount > 0) {
+      onBooksAdded();
+      setScrapeError(`تم إضافة ${addedCount} كتاب بنجاح`);
       setTimeout(() => {
         const el = document.getElementById('books-archive');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       }, 300);
+    } else {
+      setScrapeError('لم يتم إضافة أي كتاب جديد');
     }
   };
 
@@ -943,15 +1028,27 @@ function groupBooks(books: BookItem[]): BookGroup[] {
 }
 
 function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks: React.Dispatch<React.SetStateAction<BookItem[]>> }) {
+  const { data: session } = useSession();
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const router = useRouter();
+  const userRole = (session?.user as any)?.role || 'user';
+  const isAdmin = userRole === 'owner';
 
-  const removeBook = (id: string) => {
-    setBooks(prev => prev.filter(b => b.id !== id));
+  const removeBook = async (id: string) => {
+    try {
+      const res = await fetch(`/api/books/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) setBooks(prev => prev.filter(b => b.id !== id));
+    } catch { /* silent */ }
   };
 
-  const removeGroup = (groupBooks: BookItem[]) => {
+  const removeGroup = async (groupBooks: BookItem[]) => {
+    for (const book of groupBooks) {
+      try {
+        await fetch(`/api/books/${book.id}`, { method: 'DELETE' });
+      } catch { /* skip */ }
+    }
     const ids = new Set(groupBooks.map(b => b.id));
     setBooks(prev => prev.filter(b => !ids.has(b.id)));
   };
@@ -1062,19 +1159,23 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
                                 onClick={() => navigateToReader(book.url, book.name)}>
                                 <BookOpen size={14} className="text-emerald-400/60 shrink-0" />
                                 <span className="flex-1 text-gray-300 text-xs truncate hover:text-emerald-300 transition-colors">{book.name}</span>
+                                {isAdmin && (
                                 <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }}
                                   className="opacity-0 group-hover/part:opacity-100 p-1 rounded text-red-400/50 hover:text-red-400 transition-all shrink-0">
                                   <Trash2 size={11} />
                                 </button>
+                                )}
                               </div>
                             ))}
-                            {/* زر حذف الكل */}
+                            {/* زر حذف الكل — فقط للمالك */}
+                            {isAdmin && (
                             <div className="flex justify-center pt-1">
                               <button onClick={(e) => { e.stopPropagation(); removeGroup(group.books); }}
                                 className="text-red-400/40 text-[10px] hover:text-red-400 transition-colors px-3 py-1">
                                 حذف السلسلة كلها
                               </button>
                             </div>
+                            )}
                           </div>
                         </motion.div>
                       )}
@@ -1103,9 +1204,11 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
                         <span className="inline-flex items-center gap-1 text-[#D4AF37] text-xs opacity-70">
                           <Eye size={12} /><span>اضغط لقراءة الكتاب</span>
                         </span>
+                        {isAdmin && (
                         <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }} className="inline-flex items-center gap-1 text-red-400/50 text-xs hover:text-red-400 transition-colors ml-auto">
                           <Trash2 size={12} />
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1145,11 +1248,41 @@ interface TeacherMessage {
   mindmap?: string;
 }
 
-function TeacherSection() {
+function TeacherSection({ session }: { session: any }) {
   const [messages, setMessages] = useState<TeacherMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // إذا لم يكن المستخدم مسجلاً، عرض رسالة تسجيل الدخول
+  if (!session?.user) {
+    return (
+      <section id="teacher" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+        <div className="section-divider mb-20" />
+        <div className="max-w-3xl mx-auto">
+          <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم متخصص في الدراسات الإسلامية والفكر الشيعي — مدعوم بـ Gemini 1.5 Pro" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-8 sm:p-12 backdrop-blur-xl text-center"
+          >
+            <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 w-fit mx-auto mb-4">
+              <Bot size={36} className="text-emerald-400" />
+            </div>
+            <h3 className="text-gray-100 font-bold text-lg mb-2">تسجيل الدخول مطلوب</h3>
+            <p className="text-gray-400 text-sm mb-6">لاستخدام خاصية الأستاذ الذكي، يجب عليك تسجيل الدخول بحساب Google أولاً.</p>
+            <button
+              onClick={() => signIn('google')}
+              className="btn-green px-6 py-3 rounded-xl text-white font-medium text-sm flex items-center gap-2 mx-auto"
+            >
+              <LogIn size={16} />
+              <span>تسجيل الدخول بحساب Google</span>
+            </button>
+          </motion.div>
+        </div>
+      </section>
+    );
+  }
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 

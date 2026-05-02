@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 // ================================================================
 //  نظام الأستاذ — Gemini 1.5 Pro
@@ -97,6 +99,11 @@ function generateFallbackMindmap(text: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'يجب تسجيل الدخول لاستخدام الأستاذ' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { question, messages } = body;
 
