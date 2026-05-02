@@ -6,11 +6,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Disable cache for all pages - force fresh render
-  experimental: {
-    isrMemoryCacheSize: 0,
-  },
- headers: async () => [
+  headers: async () => [
     {
       source: "/(.*)",
       headers: [
@@ -65,4 +61,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
