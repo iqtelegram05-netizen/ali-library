@@ -10,7 +10,6 @@ export async function GET() {
       return NextResponse.json({ user: null });
     }
 
-    // Refresh from DB to get latest displayName
     const userId = (session.user as any).id;
     let dbUser = null;
     if (userId) {

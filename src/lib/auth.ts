@@ -16,7 +16,6 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       try {
-        // Create or update user in DB manually
         if (user?.email) {
           await prisma.user.upsert({
             where: { email: user.email },
@@ -35,7 +34,7 @@ export const authOptions: NextAuthOptions = {
         return true;
       } catch (error: any) {
         console.error('[AUTH] signIn error:', error?.message || error);
-        return true; // Still allow sign-in even if DB fails
+        return true;
       }
     },
     async jwt({ token, user, trigger, session }) {
@@ -43,7 +42,6 @@ export const authOptions: NextAuthOptions = {
         token.role = 'user';
         token.id = user.id;
         token.displayName = null;
-        // Fetch actual user data from DB
         try {
           if (user.email) {
             const dbUser = await prisma.user.findUnique({
