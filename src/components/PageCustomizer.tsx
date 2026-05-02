@@ -234,6 +234,7 @@ export default function PageCustomizer() {
 
       // Check if all contents are text
       const mark = document.createElement('mark');
+      mark.setAttribute('data-highlight', 'true');
       mark.style.backgroundColor = color;
       mark.style.borderRadius = '2px';
       mark.style.padding = '0 2px';
@@ -256,6 +257,7 @@ export default function PageCustomizer() {
       try {
         const range = selection.getRangeAt(0);
         const mark = document.createElement('mark');
+        mark.setAttribute('data-highlight', 'true');
         mark.style.backgroundColor = color;
         mark.style.borderRadius = '2px';
         mark.style.padding = '0 2px';
