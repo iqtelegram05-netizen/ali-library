@@ -1,10 +1,8 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from './db';
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -13,36 +11,55 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
+    async signIn({ user, account, profile }) {
+      try {
+        // Create or update user in DB manually
+        if (user?.email) {
+          await prisma.user.upsert({
+            where: { email: user.email },
+            update: {
+              name: user.name || undefined,
+              image: user.image || undefined,
+            },
+            create: {
+              email: user.email,
+              name: user.name || null,
+              image: user.image || null,
+              role: 'user',
+            },
+          });
+        }
+        return true;
+      } catch (error: any) {
+        console.error('[AUTH] signIn error:', error?.message || error);
+        return true; // Still allow sign-in even if DB fails
+      }
+    },
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.role = (user as any).role || 'user';
+        token.role = 'user';
         token.id = user.id;
-        token.displayName = (user as any).displayName || null;
-      }
-      // Allow updating token from client (after profile update)
-      if (trigger === 'update' && session) {
-        if (session.displayName !== undefined) {
-          token.displayName = session.displayName;
-        }
-        if (session.name !== undefined) {
-          token.name = session.name;
-        }
-      }
-      // Refresh displayName from DB on each JWT refresh
-      if (token.id) {
+        token.displayName = null;
+        // Fetch actual user data from DB
         try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: { role: true, displayName: true },
-          });
-          if (dbUser) {
-            token.role = dbUser.role;
-            token.displayName = dbUser.displayName;
+          if (user.email) {
+            const dbUser = await prisma.user.findUnique({
+              where: { email: user.email },
+              select: { id: true, role: true, displayName: true },
+            });
+            if (dbUser) {
+              token.role = dbUser.role;
+              token.id = dbUser.id;
+              token.displayName = dbUser.displayName;
+            }
           }
         } catch {}
+      }
+      if (trigger === 'update' && session) {
+        if (session.displayName !== undefined) token.displayName = session.displayName;
       }
       return token;
     },
