@@ -20,6 +20,7 @@ import CosmicPortal from '@/components/CosmicPortal';
 import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
 import GeoHoverEffect from '@/components/GeoHoverEffect';
+import PageCustomizer from '@/components/PageCustomizer';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -293,6 +294,9 @@ export default function Home() {
 
       {/* Footer */}
       <FooterSection />
+
+      {/* Page Customizer: Background, Text, Screenshot, Highlighting */}
+      <PageCustomizer />
 
     </div>
   );
