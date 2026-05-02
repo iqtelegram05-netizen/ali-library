@@ -15,7 +15,15 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-const MermaidRenderer = dynamic(() => import('@/components/MermaidRenderer'), { ssr: false });
+const MermaidRenderer = dynamic(() => import('@/components/MermaidRenderer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-8 gap-3">
+      <div className="w-8 h-8 rounded-full border-2 border-emerald-500/30 border-t-emerald-400 animate-spin" />
+      <span className="text-gray-400 text-sm">جارٍ التحميل...</span>
+    </div>
+  ),
+});
 import CosmicPortal from '@/components/CosmicPortal';
 import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
