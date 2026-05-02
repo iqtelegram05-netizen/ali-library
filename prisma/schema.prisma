@@ -11,6 +11,7 @@ model User {
   id            String   @id @default(cuid())
   email         String   @unique
   name          String?
+  displayName   String?
   image         String?
   role          String   @default("user") // "owner", "admin", "user"
   createdAt     DateTime @default(now())

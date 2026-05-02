@@ -11,7 +11,7 @@ import {
   BookMarked, Loader2, Menu, X, Star,
   ChevronLeft, ChevronRight, Heart, CheckCircle2, AlertTriangle,
   Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bot, Bug,
-  ChevronDown, Layers, LogIn, LogOut, ShieldCheck
+  ChevronDown, Layers, LogIn, LogOut, ShieldCheck, User, UserPlus, Settings, Crown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -302,6 +302,286 @@ export default function Home() {
    NAVIGATION
    =================================================================== */
 
+/* ===================================================================
+   PROFILE EDIT MODAL
+   =================================================================== */
+
+function ProfileEditModal({ isOpen, onClose, session, onUpdate }: {
+  isOpen: boolean;
+  onClose: () => void;
+  session: any;
+  onUpdate: (data: any) => void;
+}) {
+  const [displayName, setDisplayName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    if (isOpen && session?.user) {
+      setDisplayName((session.user as any).displayName || session.user.name || '');
+      setError('');
+      setSuccess('');
+    }
+  }, [isOpen, session]);
+
+  const handleSave = async () => {
+    setError('');
+    setSuccess('');
+    if (!displayName.trim()) {
+      setError('يجب إدخال اسم');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: displayName.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSuccess('تم تحديث الاسم بنجاح');
+        onUpdate(data.user);
+        setTimeout(() => onClose(), 1000);
+      } else {
+        setError(data.error || 'فشل في تحديث الاسم');
+      }
+    } catch {
+      setError('فشل الاتصال بالخادم');
+    }
+    setSaving(false);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="relative bg-[#0d1117] border border-emerald-500/20 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-gray-100 font-bold text-lg flex items-center gap-2">
+            <User size={20} className="text-emerald-400" />
+            تعديل الملف الشخصي
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 mb-4 p-3 bg-[#111827] rounded-xl">
+            {session?.user?.image && (
+              <img src={session.user.image} alt="" className="w-12 h-12 rounded-full border border-emerald-500/30" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-gray-400 text-xs">الحساب المرتبط</p>
+              <p className="text-gray-200 text-sm font-medium truncate">{session?.user?.name}</p>
+              <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session?.user?.email}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-xs font-medium mb-1.5">الاسم المعروض في الموقع</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={50}
+              placeholder="أدخل اسمك الذي تريده أن يظهر للمستخدمين..."
+              className="w-full px-4 py-2.5 rounded-xl bg-[#111827] border border-emerald-500/20 text-gray-100 text-sm placeholder-gray-600 outline-none focus:border-emerald-500/50 transition-all"
+              dir="rtl"
+            />
+            <p className="text-gray-600 text-[10px] mt-1">هذا الاسم سيظهر للمستخدمين الآخرين بدلاً من اسم حساب Google</p>
+          </div>
+
+          {error && <p className="text-red-400 text-xs flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
+          {success && <p className="text-emerald-400 text-xs flex items-center gap-1"><CheckCircle2 size={12} />{success}</p>}
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 text-sm font-medium transition-all disabled:opacity-50">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {saving ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+            </button>
+            <button onClick={onClose}
+              className="px-4 py-2.5 rounded-xl bg-[#111827] border border-gray-700/50 text-gray-400 hover:text-gray-200 text-sm transition-all">
+              إلغاء
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ===================================================================
+   AUTH MENU (Login / Register / User Dropdown)
+   =================================================================== */
+
+function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const router = useRouter();
+  const userRole = (session?.user as any)?.role || 'user';
+  const displayName = (session?.user as any)?.displayName || null;
+  const displayedName = displayName || session?.user?.name || 'مستخدم';
+
+  const roleLabels: Record<string, string> = {
+    owner: 'المالك',
+    admin: 'مشرف',
+    user: 'عضو',
+  };
+  const roleColors: Record<string, string> = {
+    owner: 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20',
+    admin: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    user: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  };
+
+  // Close menu on outside click
+  useEffect(() => {
+    const handler = () => setMenuOpen(false);
+    if (menuOpen) document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [menuOpen]);
+
+  // Logged out state: Show Login + Register buttons
+  if (!session?.user) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => signIn('google')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 hover:border-gray-600/50 transition-all"
+        >
+          <UserPlus size={14} className="text-emerald-400" />
+          <span className="hidden sm:inline">حساب جديد</span>
+        </button>
+        <button
+          onClick={() => signIn('google')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
+        >
+          <LogIn size={14} />
+          <span className="hidden sm:inline">تسجيل الدخول</span>
+        </button>
+      </div>
+    );
+  }
+
+  // Logged in state: User avatar dropdown
+  return (
+    <>
+      <div className="relative">
+        <button
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-[#1a1a2e] border border-emerald-500/15 hover:border-emerald-500/30 transition-all"
+        >
+          {session.user.image ? (
+            <img src={session.user.image} alt="" className="w-7 h-7 rounded-full border border-emerald-500/30" />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+              <User size={14} className="text-emerald-400" />
+            </div>
+          )}
+          <span className="text-gray-200 text-xs font-medium hidden sm:block max-w-[100px] truncate">{displayedName}</span>
+          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border hidden sm:inline-block ${roleColors[userRole] || roleColors.user}`}>
+            {roleLabels[userRole] || 'عضو'}
+          </span>
+          <ChevronDown size={12} className={`text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-0 mt-2 w-64 bg-[#0d1117]/98 border border-emerald-500/15 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden z-[60]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* User Info Header */}
+              <div className="p-4 border-b border-emerald-500/10">
+                <div className="flex items-center gap-3">
+                  {session.user.image ? (
+                    <img src={session.user.image} alt="" className="w-10 h-10 rounded-full border border-emerald-500/30" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                      <User size={18} className="text-emerald-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
+                    <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session.user.email}</p>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border mt-1 inline-block ${roleColors[userRole] || roleColors.user}`}>
+                      {roleLabels[userRole] || 'عضو'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="p-2">
+                <button
+                  onClick={() => { setShowProfileEdit(true); setMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-300 hover:bg-[#1a1a2e] hover:text-gray-100 transition-all text-sm"
+                >
+                  <User size={16} className="text-emerald-400" />
+                  <span>تعديل الملف الشخصي</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => { router.push('/admin'); setMenuOpen(false); }}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all text-sm"
+                  >
+                    <ShieldCheck size={16} />
+                    <span>لوحة التحكم</span>
+                  </button>
+                )}
+
+                <div className="border-t border-emerald-500/10 my-1" />
+
+                <button
+                  onClick={() => { signOut(); setMenuOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm"
+                >
+                  <LogOut size={16} />
+                  <span>تسجيل الخروج</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <ProfileEditModal
+        isOpen={showProfileEdit}
+        onClose={() => setShowProfileEdit(false)}
+        session={session}
+        onUpdate={(data) => {
+          // Update session after profile edit
+          const updateData: any = { displayName: data.displayName };
+          if (data.name) updateData.name = data.name;
+        }}
+      />
+    </>
+  );
+}
+
+/* ===================================================================
+   NAVIGATION
+   =================================================================== */
+
 function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, session, isAdmin }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
@@ -368,29 +648,7 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Auth Button */}
-            {session?.user ? (
-              <div className="flex items-center gap-2">
-                {session.user.image && (
-                  <img src={session.user.image} alt="" className="w-7 h-7 rounded-full border border-emerald-500/30 hidden sm:block" />
-                )}
-                <button
-                  onClick={() => signOut()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
-                >
-                  <LogOut size={14} />
-                  <span className="hidden sm:inline">خروج</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => signIn('google')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
-              >
-                <LogIn size={14} />
-                <span className="hidden sm:inline">تسجيل الدخول</span>
-              </button>
-            )}
+            <AuthMenu session={session} isAdmin={isAdmin} />
             <button
               className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -412,11 +670,32 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
   const { data: session } = useSession();
   const router = useRouter();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
+  const userRole = (session?.user as any)?.role || 'user';
+  const displayName = (session?.user as any)?.displayName || null;
+  const displayedName = displayName || session?.user?.name || 'مستخدم';
+
   return (
     <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed inset-0 z-40 lg:hidden">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
       <div className="absolute top-16 left-0 right-0 bg-[#0d1117]/95 backdrop-blur-xl border-b border-emerald-500/15 p-4">
         <div className="flex flex-col gap-1">
+          {/* Mobile User Info */}
+          {session?.user && (
+            <div className="flex items-center gap-3 px-4 py-3 mb-2 bg-[#111827] rounded-xl">
+              {session.user.image ? (
+                <img src={session.user.image} alt="" className="w-10 h-10 rounded-full border border-emerald-500/30" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                  <User size={18} className="text-emerald-400" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
+                <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session.user.email}</p>
+              </div>
+            </div>
+          )}
+
           {navItems.map(item => {
             const Icon = item.icon;
             return (
@@ -436,17 +715,31 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
           )}
           <div className="border-t border-emerald-500/10 mt-2 pt-2">
             {session?.user ? (
-              <button onClick={() => signOut()}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium w-full text-right">
-                <LogOut size={18} />
-                <span>تسجيل الخروج</span>
-              </button>
+              <>
+                <button onClick={() => { setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-all text-sm font-medium w-full text-right">
+                  <User size={18} />
+                  <span>تعديل الملف الشخصي</span>
+                </button>
+                <button onClick={() => signOut()}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium w-full text-right">
+                  <LogOut size={18} />
+                  <span>تسجيل الخروج</span>
+                </button>
+              </>
             ) : (
-              <button onClick={() => signIn('google')}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-all text-sm font-medium w-full text-right">
-                <LogIn size={18} />
-                <span>تسجيل الدخول بحساب Google</span>
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => signIn('google')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all text-sm font-medium">
+                  <LogIn size={18} />
+                  <span>تسجيل الدخول</span>
+                </button>
+                <button onClick={() => signIn('google')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 transition-all text-sm font-medium">
+                  <UserPlus size={18} className="text-emerald-400" />
+                  <span>حساب جديد</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
