@@ -6,6 +6,29 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // Disable cache for all pages - force fresh render
+  experimental: {
+    isrMemoryCacheSize: 0,
+  },
+ headers: async () => [
+    {
+      source: "/(.*)",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+        },
+        {
+          key: "Pragma",
+          value: "no-cache",
+        },
+        {
+          key: "Expires",
+          value: "0",
+        },
+      ],
+    },
+  ],
   // Silence Turbopack webpack config warning
   turbopack: {
     resolveAlias: {
