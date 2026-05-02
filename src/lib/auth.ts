@@ -17,17 +17,20 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       try {
         if (user?.email) {
+          const ownerEmail = process.env.OWNER_EMAIL;
+          const isOwner = ownerEmail && user.email.toLowerCase() === ownerEmail.toLowerCase();
           await prisma.user.upsert({
             where: { email: user.email },
             update: {
               name: user.name || undefined,
               image: user.image || undefined,
+              ...(isOwner ? { role: 'owner' } : {}),
             },
             create: {
               email: user.email,
               name: user.name || null,
               image: user.image || null,
-              role: 'user',
+              role: isOwner ? 'owner' : 'user',
             },
           });
         }
@@ -38,24 +41,20 @@ export const authOptions: NextAuthOptions = {
       }
     },
     async jwt({ token, user, trigger, session }) {
-      if (user) {
-        token.role = 'user';
-        token.id = user.id;
-        token.displayName = null;
-        try {
-          if (user.email) {
-            const dbUser = await prisma.user.findUnique({
-              where: { email: user.email },
-              select: { id: true, role: true, displayName: true },
-            });
-            if (dbUser) {
-              token.role = dbUser.role;
-              token.id = dbUser.id;
-              token.displayName = dbUser.displayName;
-            }
+      try {
+        const email = user?.email || token?.email;
+        if (email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, role: true, displayName: true },
+          });
+          if (dbUser) {
+            token.role = dbUser.role;
+            token.id = dbUser.id;
+            token.displayName = dbUser.displayName;
           }
-        } catch {}
-      }
+        }
+      } catch {}
       if (trigger === 'update' && session) {
         if (session.displayName !== undefined) token.displayName = session.displayName;
       }

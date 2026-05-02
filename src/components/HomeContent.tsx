@@ -239,7 +239,7 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Hero Section */}
-      <HeroSection scrollToSection={scrollToSection} />
+      <HeroSection scrollToSection={scrollToSection} isAdmin={isAdmin} />
 
       {/* About Section */}
       <AboutSection />
@@ -750,7 +750,7 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
    HERO SECTION
    =================================================================== */
 
-function HeroSection({ scrollToSection }: { scrollToSection: (id: string) => void }) {
+function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: string) => void; isAdmin: boolean }) {
   return (
     <section id="hero" className="relative flex flex-col items-center justify-center pt-20 pb-8 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       {/* Dark Geometric Decorations - MORE PROMINENT */}
@@ -829,7 +829,7 @@ function HeroSection({ scrollToSection }: { scrollToSection: (id: string) => voi
         {/* Compact Button Row - Dark Theme */}
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.8 }} className="mt-10 px-4 w-full max-w-3xl">
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
-            {HERO_BUTTONS.map((item, i) => {
+            {HERO_BUTTONS.filter(b => isAdmin || b.section !== 'fetch-engine').map((item, i) => {
               const Icon = item.icon;
               return (
                 <motion.button
@@ -1513,14 +1513,8 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
               <Library size={36} className="text-gray-600" />
             </div>
             <p className="text-gray-500 text-sm">
-              {books.length === 0 ? 'لا توجد كتب بعد. انتقل إلى "إحضار الكتب" لاستخراج كتب من المواقع.' : 'لا توجد كتب في هذا القسم.'}
+              {books.length === 0 ? 'لا توجد كتب متاحة حالياً. سيتم إضافة كتب جديدة قريباً.' : 'لا توجد كتب في هذا القسم.'}
             </p>
-            {books.length === 0 && (
-              <button onClick={() => { const el = document.getElementById('fetch-engine'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-xs hover:bg-[#D4AF37]/15 transition-all">
-                <BookType size={14} /><span>الذهاب لإحضار الكتب</span>
-              </button>
-            )}
           </motion.div>
         )}
       </div>
