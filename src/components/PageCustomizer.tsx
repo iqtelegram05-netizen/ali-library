@@ -3,7 +3,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, Camera, RotateCcw, Type, Palette, Minus, Plus, X, Eraser } from 'lucide-react';
-import html2canvas from 'html2canvas-pro';
+// html2canvas is loaded dynamically on demand to avoid SSR issues
+let html2canvasModule: any = null;
+async function getHtml2Canvas() {
+  if (!html2canvasModule) {
+    html2canvasModule = (await import('html2canvas-pro')).default;
+  }
+  return html2canvasModule;
+}
 
 /* ===================================================================
    CONSTANTS
@@ -161,6 +168,7 @@ export default function PageCustomizer() {
       await new Promise((r) => setTimeout(r, 100));
 
       // Capture
+      const html2canvas = await getHtml2Canvas();
       const canvas = await html2canvas(document.body, {
         backgroundColor: settings.bgColor,
         scale: 2,
