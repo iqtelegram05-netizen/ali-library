@@ -772,9 +772,9 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
 
 function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: string) => void; isAdmin: boolean }) {
   return (
-    <section id="hero" className="relative flex flex-col items-center justify-center pt-20 pb-8 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      {/* Dark Geometric Decorations - MORE PROMINENT */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ backgroundColor: '#0a0a0f' }}>
+    <section id="hero" className="relative flex flex-col items-center justify-center pt-16 sm:pt-20 pb-6 sm:pb-8 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      {/* Dark Geometric Decorations - Hidden on mobile for clean look */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden hidden sm:block" style={{ backgroundColor: '#0a0a0f' }}>
         <div className="absolute top-1/4 left-[8%] w-48 h-48 rotate-geo opacity-[0.25]">
           <div className="w-full h-full border-2 border-emerald-400/30 rounded-full" />
         </div>
@@ -802,11 +802,11 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
       {/* Orbital Logo System */}
       <div className="relative z-10 flex flex-col items-center">
         <motion.div initial={{ opacity: 0, scale: 0, rotate: -180 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }} className="relative">
-          {/* Orbital Rings */}
-          <div className="absolute inset-[-70px] rounded-full border border-emerald-400/25 orbit-1" />
-          <div className="absolute inset-[-95px] rounded-full border border-emerald-400/20 orbit-2" />
-          <div className="absolute inset-[-120px] rounded-full border border-[#D4AF37]/15 orbit-3" />
-          <div className="absolute inset-[-145px] rounded-full border border-[#D4AF37]/10 orbit-4" />
+          {/* Orbital Rings - smaller on mobile */}
+          <div className="absolute rounded-full border border-emerald-400/25 orbit-1 -inset-[40px] sm:-inset-[70px]" />
+          <div className="absolute rounded-full border border-emerald-400/20 orbit-2 -inset-[55px] sm:-inset-[95px]" />
+          <div className="absolute rounded-full border border-[#D4AF37]/15 orbit-3 hidden sm:block -inset-[120px]" />
+          <div className="absolute rounded-full border border-[#D4AF37]/10 orbit-4 hidden md:block -inset-[145px]" />
 
           {/* Orbiting Dots */}
           <div className="absolute inset-0 orbit-1">
@@ -815,16 +815,16 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
           <div className="absolute inset-0 orbit-2">
             <div className="absolute -top-[3px] left-1/2 w-1 h-1 bg-[#D4AF37] rounded-full shadow-sm shadow-[#D4AF37]/40" />
           </div>
-          <div className="absolute inset-0 orbit-3">
+          <div className="absolute inset-0 orbit-3 hidden sm:block">
             <div className="absolute -top-[3px] left-1/2 w-1.5 h-1.5 bg-emerald-300 rounded-full shadow-sm shadow-emerald-300/40" />
           </div>
-          <div className="absolute inset-0 orbit-4">
+          <div className="absolute inset-0 orbit-4 hidden md:block">
             <div className="absolute -top-[2px] left-1/2 w-1 h-1 bg-[#D4AF37]/70 rounded-full shadow-sm shadow-[#D4AF37]/30" />
           </div>
 
-          {/* Pulse Rings */}
-          <div className="absolute inset-[-30px] rounded-full border border-emerald-400/20 pulse-ring" />
-          <div className="absolute inset-[-50px] rounded-full border border-[#D4AF37]/12 pulse-ring" style={{ animationDelay: '1s' }} />
+          {/* Pulse Rings - smaller on mobile */}
+          <div className="absolute rounded-full border border-emerald-400/20 pulse-ring -inset-[20px] sm:-inset-[30px]" />
+          <div className="absolute rounded-full border border-[#D4AF37]/12 pulse-ring hidden sm:block -inset-[50px]" style={{ animationDelay: '1s' }} />
 
           {/* Logo Container */}
           <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-[#0d1117] flex items-center justify-center border border-emerald-500/30 shadow-lg shadow-emerald-500/10">
@@ -834,12 +834,12 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
         </motion.div>
 
         {/* Title */}
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8 }} className="mt-8 text-center">
-          <h1 className="text-3xl sm:text-5xl font-bold text-gray-100 mb-2">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.8 }} className="mt-6 sm:mt-8 text-center">
+          <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold text-gray-100 mb-2">
             مكتبة العلي <span className="text-white" style={{ color: '#ffffff' }}>الرقمية</span>
           </h1>
-          <p className="text-emerald-400 text-base sm:text-lg mb-1">Al-Ali Digital Library</p>
-          <p className="text-gray-400 text-sm max-w-lg mx-auto leading-relaxed px-4">
+          <p className="text-emerald-400 text-sm sm:text-base md:text-lg mb-1">Al-Ali Digital Library</p>
+          <p className="text-gray-400 text-xs sm:text-sm max-w-lg mx-auto leading-relaxed px-2">
             مختبر بحثي ذكي متخصص في الدراسات الإسلامية والفكر الشيعي
             <br />
             مدعوم بالذكاء الاصطناعي
@@ -847,7 +847,7 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
         </motion.div>
 
         {/* Compact Button Row - Dark Theme */}
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.8 }} className="mt-10 px-4 w-full max-w-3xl">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.8 }} className="mt-8 sm:mt-10 px-2 sm:px-4 w-full max-w-3xl">
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
             {HERO_BUTTONS.filter(b => isAdmin || b.section !== 'fetch-engine').map((item, i) => {
               const Icon = item.icon;
@@ -857,7 +857,7 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
                   whileHover={{ scale: 1.05, y: -2 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => scrollToSection(item.section)}
-                  className="relative group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0d1117]/80 border border-emerald-500/20 text-gray-200 hover:border-emerald-500/40 backdrop-blur-xl transition-all duration-200 text-sm font-medium cursor-pointer overflow-hidden"
+                  className="relative group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#0d1117]/80 border border-emerald-500/20 text-gray-200 hover:border-emerald-500/40 backdrop-blur-xl transition-all duration-200 text-xs sm:text-sm font-medium cursor-pointer overflow-hidden"
                 >
                   {/* Hexagon wireframe behind on hover */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -891,8 +891,8 @@ function HeroSection({ scrollToSection, isAdmin }: { scrollToSection: (id: strin
 
 function AboutSection() {
   return (
-    <section className="relative py-16 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-16" />
+    <section className="relative py-10 sm:py-16 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      <div className="section-divider mb-10 sm:mb-16" />
       <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -1388,8 +1388,8 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
   const bookGroups = groupBooks(filteredBooks);
 
   return (
-    <section id="books-archive" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
+    <section id="books-archive" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-5xl mx-auto">
         <SectionHeader icon={Library} title="المكتبة الرقمية" subtitle="مخزن الكتب المشفوطة والمصنفة تلقائياً — الموسوعات والسلاسل متجمعة" />
 
@@ -1564,8 +1564,8 @@ function TeacherSection({ session }: { session: any }) {
   // إذا لم يكن المستخدم مسجلاً، عرض رسالة تسجيل الدخول
   if (!session?.user) {
     return (
-      <section id="teacher" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-        <div className="section-divider mb-20" />
+      <section id="teacher" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+        <div className="section-divider mb-10 sm:mb-20" />
         <div className="max-w-3xl mx-auto">
           <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم متخصص في الدراسات الإسلامية والفكر الشيعي — مدعوم بـ Gemini 1.5 Pro" />
           <motion.div
@@ -1637,12 +1637,12 @@ function TeacherSection({ session }: { session: any }) {
   ];
 
   return (
-    <section id="teacher" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
+    <section id="teacher" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-4xl mx-auto">
         <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم ذكي يعتمد على Gemini 1.5 Pro — يقدم إجابات عميقة مع خرائط ذهنية تفاعلية" />
         <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-8 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/20">
-          <div className="h-[500px] overflow-y-auto p-4 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
+          <div className="h-[350px] sm:h-[500px] overflow-y-auto p-4 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center gap-4">
                 <div className="p-4 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/20">
@@ -1661,8 +1661,8 @@ function TeacherSection({ session }: { session: any }) {
             ) : (
               <>
                 {messages.map((msg) => (
-                  <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`max-w-[85%] ${msg.role === 'user' ? 'mr-auto' : 'ml-auto'}`}>
-                    <div className={`p-4 ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
+                  <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`max-w-[92%] sm:max-w-[85%] ${msg.role === 'user' ? 'mr-auto' : 'ml-auto'}`}>
+                    <div className={`p-3 sm:p-4 ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
                       {msg.role === 'assistant' && (
                         <div className="flex items-center gap-1.5 mb-2">
                           <div className="p-1 rounded-full bg-[#D4AF37]/10">
@@ -1687,8 +1687,8 @@ function TeacherSection({ session }: { session: any }) {
                   </motion.div>
                 ))}
                 {loading && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-[85%] ml-auto">
-                    <div className="chat-ai p-4">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-[92%] sm:max-w-[85%] ml-auto">
+                    <div className="chat-ai p-3 sm:p-4">
                       <div className="flex items-center gap-1.5 mb-2">
                         <div className="p-1 rounded-full bg-[#D4AF37]/10"><Bot size={12} className="text-[#D4AF37]" /></div>
                         <span className="text-[#D4AF37] text-[11px] font-medium">الأستاذ الذكي</span>
@@ -1733,8 +1733,8 @@ function BiographySection() {
   const currentImams = IMAMS_DATA.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
 
   return (
-    <section id="biography" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
+    <section id="biography" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-5xl mx-auto">
         <SectionHeader icon={Heart} title="سيرة آل محمد (ع)" subtitle="قاعدة بيانات هولوغرامية تفاعلية مخصصة لحياة المعصومين الأربعة عشر وكتبهم ومواقفهم" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
@@ -1818,8 +1818,8 @@ function AdvancedSearchSection() {
   };
 
   return (
-    <section id="search" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-20" />
+    <section id="search" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+      <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-4xl mx-auto">
         <SectionHeader icon={Search} title="البحث المتطور" subtitle="بحث موضوعي يعتمد على المنطق والمعنى وليس مجرد الكلمات - مفهومي وعميق" />
         <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-8 p-6 sm:p-8 backdrop-blur-xl shadow-lg shadow-black/20">
@@ -1864,7 +1864,7 @@ function AdvancedSearchSection() {
 
 function FooterSection() {
   return (
-    <footer className="relative py-12 px-4 border-t border-emerald-500/10" style={{ backgroundColor: '#0a0a0f' }}>
+    <footer className="relative py-8 sm:py-12 px-4 border-t border-emerald-500/10" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="max-w-5xl mx-auto text-center">
         <div className="flex items-center justify-center gap-3 mb-4">
           <img src={LOGO_URL} alt="مكتبة العلي" className="w-8 h-8 rounded-full border border-emerald-500/20" />

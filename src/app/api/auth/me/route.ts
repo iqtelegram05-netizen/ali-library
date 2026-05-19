@@ -1,37 +1,39 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getToken } from 'next-auth/jwt';
 import { prisma } from '@/lib/db';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    // getToken works directly with App Router Request objects
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+    if (!token?.email) {
       return NextResponse.json({ user: null });
     }
 
-    const userId = (session.user as any).id;
+    // Get fresh user data from DB
     let dbUser = null;
-    if (userId) {
-      try {
-        dbUser = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { displayName: true, role: true },
-        });
-      } catch {}
+    try {
+      dbUser = await prisma.user.findUnique({
+        where: { email: token.email as string },
+        select: { id: true, displayName: true, role: true },
+      });
+    } catch {
+      // DB lookup failed — use token data only
     }
 
     return NextResponse.json({
       user: {
-        id: (session.user as any).id,
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-        role: dbUser?.role || (session.user as any).role || 'user',
-        displayName: dbUser?.displayName || null,
+        id: dbUser?.id || (token.id as string) || null,
+        name: (token.name as string) || null,
+        email: token.email as string,
+        image: (token.picture as string) || null,
+        role: dbUser?.role || (token.role as string) || 'user',
+        displayName: dbUser?.displayName || (token.displayName as string) || null,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('[AUTH /api/auth/me] Error:', error);
     return NextResponse.json({ user: null });
   }
 }

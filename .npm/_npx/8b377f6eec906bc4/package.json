@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "next": "^16.2.6"
+  },
+  "_npx": {
+    "packages": [
+      "next"
+    ]
+  }
+}
