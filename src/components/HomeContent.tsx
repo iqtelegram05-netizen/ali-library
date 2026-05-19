@@ -466,7 +466,7 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
     user: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   };
 
-  // Close menu on outside click
+  // Close menu on outside click — ALWAYS called (before conditional return)
   useEffect(() => {
     const handler = () => setMenuOpen(false);
     if (menuOpen) document.addEventListener('click', handler);
@@ -1559,6 +1559,8 @@ function TeacherSection({ session }: { session: any }) {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
   // إذا لم يكن المستخدم مسجلاً، عرض رسالة تسجيل الدخول
   if (!session?.user) {
     return (
@@ -1588,8 +1590,6 @@ function TeacherSection({ session }: { session: any }) {
       </section>
     );
   }
-
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;

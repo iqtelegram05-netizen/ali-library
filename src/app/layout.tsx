@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Suspense } from "react";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import Providers from "@/components/Providers";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,20 +24,6 @@ export const metadata: Metadata = {
   },
 };
 
-function LoadingFallback() {
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ backgroundColor: '#0a0a0f' }}
-    >
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-2 border-emerald-500/30 border-t-emerald-400 animate-spin" />
-        <p className="text-gray-500 text-sm">جارٍ التحميل...</p>
-      </div>
-    </div>
-  );
-}
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -49,12 +35,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: '#0a0a0f', color: '#e2e8f0' }}
       >
-        <Providers>
-          <Suspense fallback={<LoadingFallback />}>
+        <ErrorBoundary>
+          <Providers>
             {children}
-          </Suspense>
-          <Toaster />
-        </Providers>
+            <Toaster />
+          </Providers>
+        </ErrorBoundary>
       </body>
     </html>
   );
