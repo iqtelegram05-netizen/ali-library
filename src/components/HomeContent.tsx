@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
 import { useAppSession } from '@/hooks/useAppSession';
 
 /* Custom sign-in/sign-out using next-auth API directly (no useSession context) */
@@ -19,15 +18,20 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-const MermaidRenderer = dynamic(() => import('@/components/MermaidRenderer'), {
-  ssr: false,
-  loading: () => (
+/* MermaidRenderer: loaded via state to avoid React 19 Suspense (#310) */
+function LazyMermaidRenderer({ chart }: { chart: string }) {
+  const [Comp, setComp] = useState<ComponentType<{ chart: string }> | null>(null);
+  useEffect(() => {
+    import('@/components/MermaidRenderer').then(mod => setComp(() => mod.default));
+  }, []);
+  if (!Comp) return (
     <div className="flex items-center justify-center py-8 gap-3">
       <div className="w-8 h-8 rounded-full border-2 border-emerald-500/30 border-t-emerald-400 animate-spin" />
       <span className="text-gray-400 text-sm">جارٍ التحميل...</span>
     </div>
-  ),
-});
+  );
+  return <Comp chart={chart} />;
+}
 import CosmicPortal from '@/components/CosmicPortal';
 import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
@@ -1676,7 +1680,7 @@ function TeacherSection({ session }: { session: any }) {
                             <Sparkles size={14} className="text-emerald-400" />
                             <span className="text-emerald-400 text-xs font-medium">الخريطة الذهنية</span>
                           </div>
-                          <MermaidRenderer chart={msg.mindmap} />
+                          <LazyMermaidRenderer chart={msg.mindmap} />
                         </div>
                       )}
                     </div>
