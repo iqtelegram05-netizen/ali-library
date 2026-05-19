@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
-import { SessionProvider } from 'next-auth/react';
+import { SessionGate } from '@/hooks/useAppSession';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
+    <SessionGate>
       {children}
-    </SessionProvider>
+    </SessionGate>
   );
 }

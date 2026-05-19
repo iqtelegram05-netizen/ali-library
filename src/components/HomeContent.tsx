@@ -4,7 +4,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useAppSession } from '@/hooks/useAppSession';
+
+/* Custom sign-in/sign-out using next-auth API directly (no useSession context) */
+function appSignIn() { window.location.href = '/api/auth/signin/google'; }
+function appSignOut() { window.location.href = '/api/auth/signout'; }
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
   Shield, ExternalLink, Send, FileText,
@@ -157,7 +161,7 @@ const HERO_BUTTONS = [
    =================================================================== */
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const { session, status } = useAppSession();
   const [activeSection, setActiveSection] = useState('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPortal, setShowPortal] = useState(true);
@@ -470,14 +474,14 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
     return (
       <div className="flex items-center gap-2">
         <button
-          onClick={() => signIn('google')}
+          onClick={() => appSignIn()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 hover:border-gray-600/50 transition-all"
         >
           <UserPlus size={14} className="text-emerald-400" />
           <span className="hidden sm:inline">حساب جديد</span>
         </button>
         <button
-          onClick={() => signIn('google')}
+          onClick={() => appSignIn()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
         >
           <LogIn size={14} />
@@ -562,7 +566,7 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
                 <div className="border-t border-emerald-500/10 my-1" />
 
                 <button
-                  onClick={() => { signOut(); setMenuOpen(false); }}
+                  onClick={() => { appSignOut(); setMenuOpen(false); }}
                   className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm"
                 >
                   <LogOut size={16} />
@@ -677,7 +681,7 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
 }) {
-  const { data: session } = useSession();
+  const { session } = useAppSession();
   const router = useRouter();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
   const userRole = (session?.user as any)?.role || 'user';
@@ -731,7 +735,7 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
                   <User size={18} />
                   <span>تعديل الملف الشخصي</span>
                 </button>
-                <button onClick={() => signOut()}
+                <button onClick={() => appSignOut()}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium w-full text-right">
                   <LogOut size={18} />
                   <span>تسجيل الخروج</span>
@@ -739,12 +743,12 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
               </>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => signIn('google')}
+                <button onClick={() => appSignIn()}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all text-sm font-medium">
                   <LogIn size={18} />
                   <span>تسجيل الدخول</span>
                 </button>
-                <button onClick={() => signIn('google')}
+                <button onClick={() => appSignIn()}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 transition-all text-sm font-medium">
                   <UserPlus size={18} className="text-emerald-400" />
                   <span>حساب جديد</span>
@@ -1331,7 +1335,7 @@ function groupBooks(books: BookItem[]): BookGroup[] {
 }
 
 function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks: React.Dispatch<React.SetStateAction<BookItem[]>> }) {
-  const { data: session } = useSession();
+  const { session } = useAppSession();
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const router = useRouter();
@@ -1569,7 +1573,7 @@ function TeacherSection({ session }: { session: any }) {
             <h3 className="text-gray-100 font-bold text-lg mb-2">تسجيل الدخول مطلوب</h3>
             <p className="text-gray-400 text-sm mb-6">لاستخدام خاصية الأستاذ الذكي، يجب عليك تسجيل الدخول بحساب Google أولاً.</p>
             <button
-              onClick={() => signIn('google')}
+              onClick={() => appSignIn()}
               className="btn-green px-6 py-3 rounded-xl text-white font-medium text-sm flex items-center gap-2 mx-auto"
             >
               <LogIn size={16} />
