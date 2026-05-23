@@ -1,16 +1,15 @@
 import { cookies } from 'next/headers';
 import { decode } from 'next-auth/jwt';
 import { prisma } from './db';
+import { auth } from './auth';
 
 /**
  * App Router compatible session helper.
  *
- * next-auth v4's `getServerSession()` and `getToken({ req })` are designed
- * for Pages Router and do NOT properly extract cookies from the App Router
- * standard `Request` object, causing all login checks to fail.
- *
- * This helper uses `cookies()` from `next/headers` + `decode` from
- * `next-auth/jwt` to reliably read the session token in App Router.
+ * In Auth.js v5, `auth()` works natively with App Router.
+ * We use it as the primary method and fall back to JWT cookie
+ * decoding for edge cases where `auth()` might not have the
+ * full context.
  */
 
 interface AppSessionUser {
@@ -28,6 +27,33 @@ export interface AppSession {
 
 export async function getAppSession(): Promise<AppSession | null> {
   try {
+    // Try Auth.js v5 auth() first — most reliable
+    const session = await auth();
+    if (session?.user?.email) {
+      // Get fresh user data from DB (for role & displayName)
+      let dbUser: { id: string; role: string; displayName: string | null; name: string | null; image: string | null; email: string } | null = null;
+      try {
+        dbUser = await prisma.user.findUnique({
+          where: { email: session.user.email! },
+          select: { id: true, role: true, displayName: true, name: true, image: true, email: true },
+        });
+      } catch {
+        // DB lookup failed — use session data only
+      }
+
+      return {
+        user: {
+          id: dbUser?.id || (session.user as any).id || null,
+          name: session.user.name || dbUser?.name || null,
+          email: session.user.email,
+          image: session.user.image || dbUser?.image || null,
+          role: (session.user as any).role || dbUser?.role || 'user',
+          displayName: (session.user as any).displayName || dbUser?.displayName || null,
+        },
+      };
+    }
+
+    // Fallback: decode JWT from cookie (same as before)
     const cookieStore = await cookies();
     const secureToken = cookieStore.get('__Secure-next-auth.session-token')?.value;
     const sessionToken = cookieStore.get('next-auth.session-token')?.value;

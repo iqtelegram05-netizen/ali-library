@@ -2,11 +2,36 @@ import { NextResponse } from 'next/server';
 import { decode } from 'next-auth/jwt';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
-    // Use cookies() from next/headers instead of getToken({ req })
-    // because next-auth v4 getToken() doesn't work with App Router Request objects
+    // Try Auth.js v5 auth() first — most reliable
+    const session = await auth();
+    if (session?.user?.email) {
+      let dbUser = null;
+      try {
+        dbUser = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true, displayName: true, role: true },
+        });
+      } catch {
+        // DB lookup failed — use session data only
+      }
+
+      return NextResponse.json({
+        user: {
+          id: dbUser?.id || (session.user as any).id || null,
+          name: session.user.name || null,
+          email: session.user.email,
+          image: session.user.image || null,
+          role: (session.user as any).role || dbUser?.role || 'user',
+          displayName: (session.user as any).displayName || dbUser?.displayName || null,
+        },
+      });
+    }
+
+    // Fallback: decode JWT from cookie
     const cookieStore = await cookies();
     const sessionToken =
       cookieStore.get('next-auth.session-token')?.value ||
