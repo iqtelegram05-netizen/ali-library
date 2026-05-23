@@ -107,17 +107,14 @@ html, body {
     display: none;
   }
   /* 3. Scale down orbit animations to fit mobile screens */
-  @keyframes orbit1 {
-    from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
-    to { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
-  }
-  @keyframes orbit2 {
-    from { transform: rotate(0deg) translateX(55px) rotate(0deg); }
-    to { transform: rotate(-360deg) translateX(55px) rotate(360deg); }
-  }
-  @keyframes pulse-ring {
-    0%, 100% { opacity: 0.4; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.05); }
+  .orbit-1 { animation: none !important; }
+  .orbit-2 { animation: none !important; }
+  .orbit-3 { animation: none !important; }
+  .orbit-4 { animation: none !important; }
+  .pulse-ring { animation: pulse-ring-mobile 3s ease-in-out infinite; }
+  @keyframes pulse-ring-mobile {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.03); }
   }
   /* 4. Contain holo-card pseudo-elements */
   .holo-card::after {
@@ -165,7 +162,6 @@ html, body {
   from { transform: rotate(0deg) translateX(95px) rotate(0deg); }
   to { transform: rotate(-360deg) translateX(95px) rotate(360deg); }
 }
-/* Mobile orbit overrides are in the @media query above */
 @keyframes orbit3 {
   from { transform: rotate(0deg) translateX(120px) rotate(0deg); }
   to { transform: rotate(360deg) translateX(120px) rotate(-360deg); }

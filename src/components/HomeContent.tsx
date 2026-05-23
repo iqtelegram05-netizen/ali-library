@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppSession } from '@/hooks/useAppSession';
 
-/* Custom sign-in/sign-out using next-auth API directly (no useSession context) */
-function appSignIn() { window.location.href = '/api/auth/signin/google'; }
-function appSignOut() { window.location.href = '/api/auth/signout'; }
+import { signIn, signOut } from 'next-auth/react';
+
+/* Custom sign-in/sign-out using next-auth/react (handles CSRF + POST properly) */
+function appSignIn() { signIn('google', { callbackUrl: '/' }); }
+function appSignOut() { signOut({ callbackUrl: '/' }); }
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
   Shield, ExternalLink, Send, FileText,

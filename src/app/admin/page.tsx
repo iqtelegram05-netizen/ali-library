@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppSession } from '@/hooks/useAppSession';
 import { useRouter } from 'next/navigation';
+import { signIn, signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import {
   BookOpen, Users, Shield, Trash2, Crown,
@@ -59,7 +60,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      window.location.href = '/api/auth/signin/google';
+      signIn('google', { callbackUrl: '/admin' });
     }
   }, [status]);
 
@@ -245,7 +246,7 @@ export default function AdminPage() {
               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${ROLE_COLORS[role] || ROLE_COLORS.user}`}>
                 {ROLE_LABELS[role] || role}
               </span>
-              <button onClick={() => { window.location.href = '/api/auth/signout'; }} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all" title="تسجيل الخروج">
+              <button onClick={() => { signOut({ callbackUrl: '/' }); }} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all" title="تسجيل الخروج">
                 <LogOut size={16} />
               </button>
             </div>
@@ -743,7 +744,7 @@ export default function AdminPage() {
               </div>
               <div className="space-y-3">
                 <button
-                  onClick={() => { window.location.href = '/api/auth/signout'; }}
+                  onClick={() => { signOut({ callbackUrl: '/' }); }}
                   className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-sm transition-all"
                 >
                   <LogOut size={16} />

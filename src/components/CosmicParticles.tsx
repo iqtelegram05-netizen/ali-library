@@ -37,8 +37,10 @@ export default function CosmicParticles() {
   useEffect(() => {
     if (!initialized.current) {
       initialized.current = true;
+      const isMobile = window.innerWidth < 640;
       const generated: Particle[] = [];
-      for (let i = 0; i < 15; i++) {
+      const count = isMobile ? 5 : 15;
+      for (let i = 0; i < count; i++) {
         const shapes = Object.keys(SHAPES) as Array<keyof typeof SHAPES>;
         generated.push({
           id: i,

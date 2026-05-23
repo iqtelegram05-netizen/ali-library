@@ -104,12 +104,15 @@ export default function FloatingBookQuotes() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [scrollY, setScrollY] = useState(0);
   const initialized = useRef(false);
+  const isMobile = useRef(false);
 
   useEffect(() => {
+    isMobile.current = window.innerWidth < 640;
     if (!initialized.current) {
       initialized.current = true;
       const generated: FloatingQuote[] = [];
-      for (let i = 0; i < 30; i++) {
+      const count = isMobile.current ? 6 : 30;
+      for (let i = 0; i < count; i++) {
         const colorIdx = Math.floor(Math.random() * COLORS.length);
         generated.push({
           id: i,
@@ -131,6 +134,7 @@ export default function FloatingBookQuotes() {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      if (isMobile.current) return;
       const x = (e.clientX / window.innerWidth - 0.5) * 2;
       const y = (e.clientY / window.innerHeight - 0.5) * 2;
       setMousePos({ x, y });
@@ -138,7 +142,9 @@ export default function FloatingBookQuotes() {
     const handleScroll = () => {
       setScrollY(window.scrollY);
     };
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    if (!isMobile.current) {
+      window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    }
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
@@ -211,7 +217,8 @@ export default function FloatingBookQuotes() {
         );
       })}
 
-      {/* Mouse follower geometric trail */}
+      {/* Mouse follower geometric trail - hidden on mobile/touch */}
+      {!isMobile.current && (
       <motion.div
         animate={{
           x: mousePos.x * 30,
@@ -235,6 +242,7 @@ export default function FloatingBookQuotes() {
           style={{ clipPath: SHAPES.hexagon }}
         />
       </motion.div>
+      )}
     </div>
   );
 }

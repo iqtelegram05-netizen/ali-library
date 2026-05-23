@@ -308,7 +308,7 @@ export default function PageCustomizer() {
   return (
     <>
       {/* Floating Toolbar */}
-      <div className="fixed bottom-6 left-6 z-[90] flex items-center gap-2" dir="rtl">
+      <div className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[90] flex items-center gap-2" dir="rtl">
         {/* Settings Button */}
         <button
           data-customizer-toggle
@@ -371,7 +371,7 @@ export default function PageCustomizer() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -320, opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="fixed top-1/2 left-6 -translate-y-1/2 z-[92] w-[300px] max-h-[80vh] rounded-2xl border border-emerald-500/20 shadow-2xl shadow-black/40 overflow-hidden"
+              className="fixed top-1/2 left-3 sm:left-6 -translate-y-1/2 z-[92] w-[calc(100vw-1.5rem)] sm:w-[300px] max-h-[80vh] rounded-2xl border border-emerald-500/20 shadow-2xl shadow-black/40 overflow-hidden"
               style={{
                 backgroundColor: isLightBg ? 'rgba(255,255,255,0.95)' : 'rgba(13,17,23,0.95)',
                 backdropFilter: 'blur(24px)',
