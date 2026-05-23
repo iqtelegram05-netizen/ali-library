@@ -11,7 +11,47 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  // Use secure cookies on HTTPS (Vercel), regular cookies on localhost
+  useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    callbackUrl: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Host-' : ''}next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    pkceCodeVerifier: {
+      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.pkce.code_verifier`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
   },
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -37,7 +77,7 @@ export const authOptions: NextAuthOptions = {
         return true;
       } catch (error: any) {
         console.error('[AUTH] signIn error:', error?.message || error);
-        return true;
+        return true; // Don't block sign-in even if DB fails
       }
     },
     async jwt({ token, user, trigger, session }) {
@@ -54,7 +94,9 @@ export const authOptions: NextAuthOptions = {
             token.displayName = dbUser.displayName;
           }
         }
-      } catch {}
+      } catch (error: any) {
+        console.error('[AUTH] jwt error:', error?.message || error);
+      }
       if (trigger === 'update' && session) {
         if (session.displayName !== undefined) token.displayName = session.displayName;
       }
