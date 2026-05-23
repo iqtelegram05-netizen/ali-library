@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/session';
 import { prisma } from '@/lib/db';
 
 // DELETE /api/books/[id] — Owner only
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'يجب تسجيل الدخول' }, { status: 401 });
     }
-    const userRole = (session.user as any).role;
+    const userRole = session.user.role;
     if (userRole !== 'owner') {
       return NextResponse.json({ success: false, error: 'ليس لديك صلاحية حذف الكتب' }, { status: 403 });
     }

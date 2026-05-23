@@ -524,7 +524,7 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className="absolute left-0 mt-2 w-64 bg-[#0d1117]/98 border border-emerald-500/15 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden z-[60]"
+              className="absolute left-0 mt-2 w-60 sm:w-64 bg-[#0d1117]/98 border border-emerald-500/15 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden z-[60]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* User Info Header */}
@@ -1117,12 +1117,12 @@ function FetchEngineSection({ books, setBooks, onBooksAdded }: { books: BookItem
   };
 
   return (
-    <section id="fetch-engine" className="relative py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
+    <section id="fetch-engine" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="max-w-5xl mx-auto">
         <SectionHeader icon={BookOpen} title="محرك استخراج الكتب" subtitle="محرك استخراج ذكي محلي يحلل الروابط ويفلتر المحتوى — ويعرض الكتب مباشرة من المصدر" />
 
         {/* === SCRAPER TOOL === */}
-        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 sm:p-8 mt-8 backdrop-blur-xl shadow-lg shadow-black/20">
+        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-4 sm:p-8 mt-6 sm:mt-8 backdrop-blur-xl shadow-lg shadow-black/20">
           <div className="flex items-center gap-2 mb-6">
             <div className="p-1.5 rounded-full bg-emerald-500/10"><Zap size={16} className="text-emerald-400" /></div>
             <span className="text-gray-200 text-sm font-medium">محرك الإحضار الذكي</span>
@@ -1571,7 +1571,7 @@ function TeacherSection({ session }: { session: any }) {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-8 bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-8 sm:p-12 backdrop-blur-xl text-center"
+            className="mt-6 sm:mt-8 bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-5 sm:p-12 backdrop-blur-xl text-center"
           >
             <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 w-fit mx-auto mb-4">
               <Bot size={36} className="text-emerald-400" />
@@ -1641,8 +1641,8 @@ function TeacherSection({ session }: { session: any }) {
       <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-4xl mx-auto">
         <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم ذكي يعتمد على Gemini 1.5 Pro — يقدم إجابات عميقة مع خرائط ذهنية تفاعلية" />
-        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-8 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/20">
-          <div className="h-[350px] sm:h-[500px] overflow-y-auto p-4 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
+        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-6 sm:mt-8 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/20">
+          <div className="h-[300px] sm:h-[500px] overflow-y-auto p-3 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center gap-4">
                 <div className="p-4 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/20">
@@ -1758,7 +1758,7 @@ function BiographySection() {
           ))}
         </div>
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-8">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 mt-6">
             <button onClick={() => setCurrentPage(Math.max(0, currentPage - 1))} disabled={currentPage === 0} className="p-2 rounded-lg bg-[#0d1117] border border-emerald-500/15 text-emerald-400 disabled:opacity-30 hover:bg-[#111827] transition-colors"><ChevronRight size={18} /></button>
             {Array.from({ length: totalPages }).map((_, i) => (
               <button key={i} onClick={() => setCurrentPage(i)} className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${currentPage === i ? 'bg-emerald-600 text-white' : 'bg-[#0d1117] border border-emerald-500/15 text-gray-300 hover:bg-[#111827]'}`}>{i + 1}</button>
@@ -1822,7 +1822,7 @@ function AdvancedSearchSection() {
       <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-4xl mx-auto">
         <SectionHeader icon={Search} title="البحث المتطور" subtitle="بحث موضوعي يعتمد على المنطق والمعنى وليس مجرد الكلمات - مفهومي وعميق" />
-        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-8 p-6 sm:p-8 backdrop-blur-xl shadow-lg shadow-black/20">
+        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-6 sm:mt-8 p-4 sm:p-8 backdrop-blur-xl shadow-lg shadow-black/20">
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="flex-1 relative">
               <Search size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -1871,7 +1871,7 @@ function FooterSection() {
           <span className="text-gray-200 font-bold text-sm">مكتبة العلي الرقمية</span>
         </div>
         <p className="text-gray-500 text-xs mb-4">مختبر بحثي ذكي متخصص في الدراسات الإسلامية والفكر الشيعي</p>
-        <div className="flex items-center justify-center gap-4 mb-4 text-[11px] text-gray-600">
+        <div className="flex items-center justify-center gap-4 mb-4 text-[11px] text-gray-600 flex-wrap">
           <span>مدعوم بالذكاء الاصطناعي</span><span>|</span><span>تصميم هندسي معقد</span><span>|</span><span>Al-Ali Digital Library</span>
         </div>
         <div className="flex items-center justify-center gap-1 text-gray-600/50 text-[10px]"><Quote size={10} /><span>بسم الله الرحمن الرحيم</span></div>

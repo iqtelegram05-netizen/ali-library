@@ -48,6 +48,16 @@ export default function GeoHoverEffect() {
   const [hoverShapes, setHoverShapes] = useState<HoverShape[]>([]);
   const [clickShapes, setClickShapes] = useState<HoverShape[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useRef(false);
+
+  // Detect mobile/touch devices once
+  useEffect(() => {
+    isMobile.current = window.matchMedia('(max-width: 639px)').matches || 'ontouchstart' in window;
+    const handler = (e: MediaQueryListEvent) => { isMobile.current = e.matches; };
+    const mq = window.matchMedia('(max-width: 639px)');
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const generateHoverShapes = useCallback((x: number, y: number): HoverShape[] => {
     const count = 5 + Math.floor(Math.random() * 4);
@@ -92,6 +102,7 @@ export default function GeoHoverEffect() {
 
   useEffect(() => {
     const handleMouseOver = (e: MouseEvent) => {
+      if (isMobile.current) return;
       const target = e.target as HTMLElement;
       // Only trigger on buttons, links, or elements with data-geo-hover
       const isInteractive =
@@ -114,6 +125,7 @@ export default function GeoHoverEffect() {
     };
 
     const handleClick = (e: MouseEvent) => {
+      if (isMobile.current) return;
       const target = e.target as HTMLElement;
       const isInteractive =
         target.closest('button') ||

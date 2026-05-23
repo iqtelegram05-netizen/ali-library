@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/session';
 
 // ================================================================
 //  نظام الأستاذ — Gemini 1.5 Pro
@@ -31,7 +30,7 @@ const SYSTEM_PROMPT = `أنت "الأستاذ الذكي" — معلم متخص�
 - استخدم صيغة mindmap فقط
 - ضع الخريطة داخل block مخصص: <<<MINDMAP_START>>> ... <<<MINDMAP_END>>>
 - استخدم اللغة العربية في عقد الخريطة
-- اجعل الخريطة شاملة覆盖 for المفاهيم الأساسية
+- اجعل الخريطة شاملة تغطي المفاهيم الأساسية
 
 مثال لتنسيق الخريطة:
 <<<MINDMAP_START>>>
@@ -99,7 +98,7 @@ function generateFallbackMindmap(text: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'يجب تسجيل الدخول لاستخدام الأستاذ' }, { status: 401 });
     }

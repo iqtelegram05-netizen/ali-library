@@ -209,8 +209,8 @@ function ReaderContent() {
       <GeoHoverEffect />
       {/* === TOOLBAR === */}
       <div className="sticky top-0 z-50 shrink-0" style={{ backgroundColor: 'rgba(13,17,23,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
-        <div className="max-w-5xl mx-auto px-3 sm:px-4">
-          <div className="flex items-center justify-between h-14 gap-3">
+        <div className="max-w-5xl mx-auto px-2 sm:px-4">
+          <div className="flex items-center justify-between h-12 sm:h-14 gap-1 sm:gap-3">
             {/* Right: Back + Title */}
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <button onClick={() => router.back()}
@@ -253,35 +253,35 @@ function ReaderContent() {
               </button>
             </div>
 
-            {/* Left: Tools */}
-            <div className="flex items-center gap-1 shrink-0">
+            {/* Left: Tools - smaller on mobile */}
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               <button onClick={handleSummarize} disabled={loading || !textContent}
-                className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
+                className="p-1.5 sm:p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
                 title="تلخيص المحتوى">
-                <Sparkles size={16} />
+                <Sparkles size={14} className="sm:w-4 sm:h-4" />
               </button>
 
               <button onClick={() => setShowToc(true)} disabled={toc.length === 0}
-                className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
+                className="p-1.5 sm:p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 disabled:opacity-30 transition-all"
                 title="الفهرست">
-                <List size={16} />
+                <List size={14} className="sm:w-4 sm:h-4" />
               </button>
 
               <button onClick={() => setSepiaMode(!sepiaMode)}
-                className={`p-2 rounded-lg transition-all ${sepiaMode ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100'}`}
+                className={`p-1.5 sm:p-2 rounded-lg transition-all ${sepiaMode ? 'bg-[#D4AF37]/20 text-[#D4AF37]' : 'hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100'}`}
                 title={sepiaMode ? 'الوضع الداكن' : 'وضع القراءة المريحة'}>
-                {sepiaMode ? <Moon size={16} /> : <Sun size={16} />}
+                {sepiaMode ? <Moon size={14} className="sm:w-4 sm:h-4" /> : <Sun size={14} className="sm:w-4 sm:h-4" />}
               </button>
 
               <button onClick={toggleFullscreen}
-                className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all"
+                className="hidden sm:block p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all"
                 title={isFullscreen ? 'إنهاء ملء الشاشة' : 'ملء الشاشة'}>
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
 
               <a href={bookUrl} target="_blank" rel="noopener noreferrer"
-                className="p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all" title="فتح المصدر">
-                <Download size={16} />
+                className="p-1.5 sm:p-2 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all" title="فتح المصدر">
+                <Download size={14} className="sm:w-4 sm:h-4" />
               </a>
             </div>
           </div>
@@ -328,9 +328,9 @@ function ReaderContent() {
 
         {/* Content */}
         {!loading && !error && content && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
+          <div className="max-w-4xl mx-auto px-3 sm:px-8 py-4 sm:py-12">
             <div
-              className="rounded-2xl p-6 sm:p-10 shadow-lg border"
+              className="rounded-2xl p-4 sm:p-10 shadow-lg border"
               style={{
                 backgroundColor: contentBg,
                 borderColor: sepiaMode ? 'rgba(180,160,120,0.2)' : 'rgba(16,185,129,0.08)',
@@ -378,13 +378,13 @@ function ReaderContent() {
       {/* === BOTTOM NAVIGATION BAR === */}
       {totalPages > 0 && !loading && (
         <div className="sticky bottom-0 z-40 shrink-0" style={{ backgroundColor: 'rgba(13,17,23,0.95)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(16,185,129,0.1)' }}>
-          <div className="max-w-5xl mx-auto px-4 py-3">
+          <div className="max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
             {/* Page navigation buttons */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3">
+            <div className="flex items-center justify-center gap-1.5 sm:gap-3">
               <button
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: 'rgba(16,185,129,0.1)',
                   border: '1px solid rgba(16,185,129,0.2)',
@@ -396,7 +396,7 @@ function ReaderContent() {
               </button>
 
               {/* Page number input */}
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl" style={{ backgroundColor: '#111827', border: '1px solid rgba(16,185,129,0.15)' }}>
+              <div className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl" style={{ backgroundColor: '#111827', border: '1px solid rgba(16,185,129,0.15)' }}>
                 <input
                   type="number"
                   min={1}
@@ -404,7 +404,7 @@ function ReaderContent() {
                   value={pageInput || currentPage}
                   onChange={(e) => setPageInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handlePageInputSubmit()}
-                  className="w-14 text-center bg-transparent text-gray-100 text-sm border-0 outline-none"
+                  className="w-10 sm:w-14 text-center bg-transparent text-gray-100 text-xs sm:text-sm border-0 outline-none"
                   dir="ltr"
                 />
                 <span className="text-gray-500 text-xs">من</span>
@@ -414,7 +414,7 @@ function ReaderContent() {
               <button
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: 'rgba(16,185,129,0.1)',
                   border: '1px solid rgba(16,185,129,0.2)',

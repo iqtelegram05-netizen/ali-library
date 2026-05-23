@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/session';
 import { prisma } from '@/lib/db';
 
 // PUT /api/user/profile — Update user display name
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'يجب تسجيل الدخول' }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
     if (!userId) {
       return NextResponse.json({ success: false, error: 'معرف المستخدم غير موجود' }, { status: 401 });
     }

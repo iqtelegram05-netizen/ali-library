@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/session';
 import { prisma } from '@/lib/db';
 
 // GET /api/books — Public: anyone can see books
@@ -18,11 +17,11 @@ export async function GET() {
 // POST /api/books — Admin/Owner only: add a new book
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'يجب تسجيل الدخول' }, { status: 401 });
     }
-    const userRole = (session.user as any).role;
+    const userRole = session.user.role;
     if (userRole !== 'owner' && userRole !== 'admin') {
       return NextResponse.json({ success: false, error: 'ليس لديك صلاحية إضافة كتب' }, { status: 403 });
     }
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
         name,
         url,
         category: category || 'other',
-        addedBy: (session.user as any).id,
+        addedBy: session.user.id || undefined,
       },
     });
 

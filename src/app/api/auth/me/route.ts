@@ -1,11 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import { decode } from 'next-auth/jwt';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 
 export async function GET(req: Request) {
   try {
-    // getToken works directly with App Router Request objects
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    // Use cookies() from next/headers instead of getToken({ req })
+    // because next-auth v4 getToken() doesn't work with App Router Request objects
+    const cookieStore = await cookies();
+    const sessionToken =
+      cookieStore.get('next-auth.session-token')?.value ||
+      cookieStore.get('__Secure-next-auth.session-token')?.value;
+
+    if (!sessionToken) {
+      return NextResponse.json({ user: null });
+    }
+
+    const token = await decode({
+      token: sessionToken,
+      secret: process.env.NEXTAUTH_SECRET || '',
+      salt:
+        cookieStore.get('__Secure-next-auth.session-token')?.value
+          ? '__Secure-next-auth.session-token'
+          : 'next-auth.session-token',
+    });
 
     if (!token?.email) {
       return NextResponse.json({ user: null });

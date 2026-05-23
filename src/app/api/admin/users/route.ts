@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getAppSession } from '@/lib/session';
 import { prisma } from '@/lib/db';
 
 // GET /api/admin/users — Owner/Admin: list all users
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
     }
-    const role = (session.user as any).role;
+    const role = session.user.role;
     if (role !== 'owner' && role !== 'admin') {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 403 });
     }
@@ -37,11 +36,11 @@ export async function GET() {
 // PUT /api/admin/users — Owner only: update user role
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppSession();
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
     }
-    if ((session.user as any).role !== 'owner') {
+    if (session.user.role !== 'owner') {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 403 });
     }
 
@@ -54,7 +53,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Prevent owner from demoting themselves
-    if ((session.user as any).id === userId && role !== 'owner') {
+    if (session.user.id === userId && role !== 'owner') {
       return NextResponse.json({ success: false, error: 'لا يمكنك تغيير دورك' });
     }
 
