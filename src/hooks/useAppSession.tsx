@@ -6,15 +6,17 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
    Custom Session Hook — Bypasses next-auth useSession() to avoid
    React 19 Suspense conflict (error #310).
    Uses /api/auth/me endpoint directly instead of React Context.
+   Supports phone-based credentials authentication.
    =================================================================== */
 
 interface UserData {
   id?: string;
   name?: string | null;
-  email?: string | null;
+  phone?: string | null;
   image?: string | null;
   role?: string;
   displayName?: string | null;
+  isVerified?: boolean;
 }
 
 interface SessionResult {
@@ -45,7 +47,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (!mountedRef.current) return;
 
-      if (data?.user?.email) {
+      if (data?.user?.phone) {
         setSession({ user: data.user });
         setStatus('authenticated');
       } else {

@@ -6,19 +6,18 @@ import { auth } from './auth';
 /**
  * App Router compatible session helper.
  *
- * In Auth.js v5, `auth()` works natively with App Router.
- * We use it as the primary method and fall back to JWT cookie
- * decoding for edge cases where `auth()` might not have the
- * full context.
+ * Works with phone-based Credentials authentication.
+ * Uses auth() from Auth.js v5 as primary, falls back to JWT decode.
  */
 
 interface AppSessionUser {
   id?: string | null;
   name?: string | null;
-  email?: string | null;
+  phone?: string | null;
   image?: string | null;
   role?: string;
   displayName?: string | null;
+  isVerified?: boolean;
 }
 
 export interface AppSession {
@@ -27,33 +26,34 @@ export interface AppSession {
 
 export async function getAppSession(): Promise<AppSession | null> {
   try {
-    // Try Auth.js v5 auth() first — most reliable
+    // Try Auth.js v5 auth() first
     const session = await auth();
-    if (session?.user?.email) {
-      // Get fresh user data from DB (for role & displayName)
-      let dbUser: { id: string; role: string; displayName: string | null; name: string | null; image: string | null; email: string } | null = null;
+    if (session?.user && (session.user as any)?.phone) {
+      const phone = (session.user as any).phone;
+      let dbUser: { id: string; role: string; displayName: string | null; name: string | null; fullName: string | null; image: string | null; isVerified: boolean } | null = null;
       try {
         dbUser = await prisma.user.findUnique({
-          where: { email: session.user.email! },
-          select: { id: true, role: true, displayName: true, name: true, image: true, email: true },
+          where: { phone },
+          select: { id: true, role: true, displayName: true, name: true, fullName: true, image: true, isVerified: true },
         });
       } catch {
-        // DB lookup failed — use session data only
+        // DB lookup failed
       }
 
       return {
         user: {
           id: dbUser?.id || (session.user as any).id || null,
-          name: session.user.name || dbUser?.name || null,
-          email: session.user.email,
+          name: dbUser?.fullName || dbUser?.name || session.user.name || null,
+          phone: phone,
           image: session.user.image || dbUser?.image || null,
           role: (session.user as any).role || dbUser?.role || 'user',
           displayName: (session.user as any).displayName || dbUser?.displayName || null,
+          isVerified: (session.user as any).isVerified || dbUser?.isVerified || false,
         },
       };
     }
 
-    // Fallback: decode JWT from cookie (same as before)
+    // Fallback: decode JWT from cookie
     const cookieStore = await cookies();
     const secureToken = cookieStore.get('__Secure-next-auth.session-token')?.value;
     const sessionToken = cookieStore.get('next-auth.session-token')?.value;
@@ -71,27 +71,27 @@ export async function getAppSession(): Promise<AppSession | null> {
       salt,
     });
 
-    if (!token?.email) return null;
+    if (!token?.phone) return null;
 
-    // Get fresh user data from DB (for role & displayName)
-    let dbUser: { id: string; role: string; displayName: string | null; name: string | null; image: string | null; email: string } | null = null;
+    let dbUser: { id: string; role: string; displayName: string | null; name: string | null; fullName: string | null; image: string | null; isVerified: boolean } | null = null;
     try {
       dbUser = await prisma.user.findUnique({
-        where: { email: token.email as string },
-        select: { id: true, role: true, displayName: true, name: true, image: true, email: true },
+        where: { phone: token.phone as string },
+        select: { id: true, role: true, displayName: true, name: true, fullName: true, image: true, isVerified: true },
       });
     } catch {
-      // DB lookup failed — use token data only
+      // DB lookup failed
     }
 
     return {
       user: {
         id: dbUser?.id || (token.id as string) || null,
-        name: dbUser?.name || (token.name as string) || null,
-        email: token.email as string,
+        name: dbUser?.fullName || dbUser?.name || (token.name as string) || null,
+        phone: token.phone as string,
         image: dbUser?.image || (token.picture as string) || null,
         role: dbUser?.role || (token.role as string) || 'user',
         displayName: dbUser?.displayName || (token.displayName as string) || null,
+        isVerified: dbUser?.isVerified || (token.isVerified as boolean) || false,
       },
     };
   } catch (error) {

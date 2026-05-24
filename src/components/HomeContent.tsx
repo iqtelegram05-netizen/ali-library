@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppSession } from '@/hooks/useAppSession';
 
-import { signIn, signOut } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 
-/* Custom sign-in/sign-out using next-auth/react (handles CSRF + POST properly) */
-function appSignIn() { signIn('google', { callbackUrl: '/' }); }
+/* Custom sign-out using next-auth/react */
 function appSignOut() { signOut({ callbackUrl: '/' }); }
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
@@ -16,7 +15,8 @@ import {
   BookMarked, Loader2, Menu, X, Star,
   ChevronLeft, ChevronRight, Heart, CheckCircle2, AlertTriangle,
   Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bot, Bug,
-  ChevronDown, Layers, LogIn, LogOut, ShieldCheck, User, UserPlus, Settings, Crown
+  ChevronDown, Layers, LogIn, LogOut, ShieldCheck, User, UserPlus, Settings, Crown,
+  HelpCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -39,6 +39,7 @@ import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
 import GeoHoverEffect from '@/components/GeoHoverEffect';
 import PageCustomizer from '@/components/PageCustomizer';
+import { LoginModal, RegisterModal, ForgotPasswordModal } from '@/components/AuthModals';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -173,6 +174,9 @@ export default function Home() {
   const [showPortal, setShowPortal] = useState(true);
   const [books, setBooks] = useState<BookItem[]>([]);
   const [booksLoaded, setBooksLoaded] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const userRole = (session?.user as any)?.role || 'user';
   const isAdmin = userRole === 'owner' || userRole === 'admin';
@@ -244,6 +248,9 @@ export default function Home() {
         setMobileMenuOpen={setMobileMenuOpen}
         session={session}
         isAdmin={isAdmin}
+        onShowLogin={() => setShowLogin(true)}
+        onShowRegister={() => setShowRegister(true)}
+        onShowForgotPassword={() => setShowForgotPassword(true)}
       />
 
       {/* Mobile Menu Overlay */}
@@ -253,6 +260,9 @@ export default function Home() {
             scrollToSection={scrollToSection}
             setMobileMenuOpen={setMobileMenuOpen}
             isAdmin={isAdmin}
+            onShowLogin={() => setShowLogin(true)}
+            onShowRegister={() => setShowRegister(true)}
+            onShowForgotPassword={() => setShowForgotPassword(true)}
           />
         )}
       </AnimatePresence>
@@ -312,6 +322,11 @@ export default function Home() {
 
       {/* Footer */}
       <FooterSection />
+
+      {/* Auth Modals */}
+      <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} onSwitchToRegister={() => setShowRegister(true)} />
+      <RegisterModal isOpen={showRegister} onClose={() => setShowRegister(false)} onSwitchToLogin={() => setShowLogin(true)} />
+      <ForgotPasswordModal isOpen={showForgotPassword} onClose={() => setShowForgotPassword(false)} />
 
       {/* Page Customizer: Background, Text, Screenshot, Highlighting */}
       <PageCustomizer />
@@ -407,7 +422,7 @@ function ProfileEditModal({ isOpen, onClose, session, onUpdate }: {
             <div className="flex-1 min-w-0">
               <p className="text-gray-400 text-xs">الحساب المرتبط</p>
               <p className="text-gray-200 text-sm font-medium truncate">{session?.user?.name}</p>
-              <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session?.user?.email}</p>
+              <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session?.user as any)?.phone || session?.user?.email}</p>
             </div>
           </div>
 
@@ -422,7 +437,7 @@ function ProfileEditModal({ isOpen, onClose, session, onUpdate }: {
               className="w-full px-4 py-2.5 rounded-xl bg-[#111827] border border-emerald-500/20 text-gray-100 text-sm placeholder-gray-600 outline-none focus:border-emerald-500/50 transition-all"
               dir="rtl"
             />
-            <p className="text-gray-600 text-[10px] mt-1">هذا الاسم سيظهر للمستخدمين الآخرين بدلاً من اسم حساب Google</p>
+            <p className="text-gray-600 text-[10px] mt-1">هذا الاسم سيظهر للمستخدمين الآخرين</p>
           </div>
 
           {error && <p className="text-red-400 text-xs flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
@@ -449,7 +464,7 @@ function ProfileEditModal({ isOpen, onClose, session, onUpdate }: {
    AUTH MENU (Login / Register / User Dropdown)
    =================================================================== */
 
-function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
+function AuthMenu({ session, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: { session: any; isAdmin: boolean; onShowLogin: () => void; onShowRegister: () => void; onShowForgotPassword: () => void; }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const router = useRouter();
@@ -480,18 +495,25 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
     return (
       <div className="flex items-center gap-2">
         <button
-          onClick={() => appSignIn()}
+          onClick={onShowRegister}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 hover:border-gray-600/50 transition-all"
         >
           <UserPlus size={14} className="text-emerald-400" />
           <span className="hidden sm:inline">حساب جديد</span>
         </button>
         <button
-          onClick={() => appSignIn()}
+          onClick={onShowLogin}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
         >
           <LogIn size={14} />
           <span className="hidden sm:inline">تسجيل الدخول</span>
+        </button>
+        <button
+          onClick={onShowForgotPassword}
+          className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
+          title="نسيت كلمة السر؟"
+        >
+          <HelpCircle size={14} />
         </button>
       </div>
     );
@@ -541,7 +563,7 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
-                    <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session.user.email}</p>
+                    <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session.user as any)?.phone || session.user.email}</p>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full border mt-1 inline-block ${roleColors[userRole] || roleColors.user}`}>
                       {roleLabels[userRole] || 'عضو'}
                     </span>
@@ -602,13 +624,16 @@ function AuthMenu({ session, isAdmin }: { session: any; isAdmin: boolean }) {
    NAVIGATION
    =================================================================== */
 
-function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, session, isAdmin }: {
+function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, session, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
   session: any;
   isAdmin: boolean;
+  onShowLogin: () => void;
+  onShowRegister: () => void;
+  onShowForgotPassword: () => void;
 }) {
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const router = useRouter();
@@ -668,7 +693,7 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             )}
           </div>
           <div className="flex items-center gap-2">
-            <AuthMenu session={session} isAdmin={isAdmin} />
+            <AuthMenu session={session} isAdmin={isAdmin} onShowLogin={onShowLogin} onShowRegister={onShowRegister} onShowForgotPassword={onShowForgotPassword} />
             <button
               className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -682,10 +707,13 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
   );
 }
 
-function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
+function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: {
   scrollToSection: (id: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
+  onShowLogin: () => void;
+  onShowRegister: () => void;
+  onShowForgotPassword: () => void;
 }) {
   const { session } = useAppSession();
   const router = useRouter();
@@ -711,7 +739,7 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
-                <p className="text-gray-500 text-[10px] truncate" dir="ltr">{session.user.email}</p>
+                <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session.user as any)?.phone || session.user.email}</p>
               </div>
             </div>
           )}
@@ -748,18 +776,25 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
                 </button>
               </>
             ) : (
-              <div className="flex gap-2">
-                <button onClick={() => appSignIn()}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all text-sm font-medium">
-                  <LogIn size={18} />
-                  <span>تسجيل الدخول</span>
+              <>
+                <div className="flex gap-2">
+                  <button onClick={() => { setMobileMenuOpen(false); onShowLogin(); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all text-sm font-medium">
+                    <LogIn size={18} />
+                    <span>تسجيل الدخول</span>
+                  </button>
+                  <button onClick={() => { setMobileMenuOpen(false); onShowRegister(); }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 transition-all text-sm font-medium">
+                    <UserPlus size={18} className="text-emerald-400" />
+                    <span>حساب جديد</span>
+                  </button>
+                </div>
+                <button onClick={() => { setMobileMenuOpen(false); onShowForgotPassword(); }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-all text-xs font-medium w-full mt-2">
+                  <HelpCircle size={14} />
+                  <span>نسيت كلمة السر؟ تواصل مع الدعم</span>
                 </button>
-                <button onClick={() => appSignIn()}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 transition-all text-sm font-medium">
-                  <UserPlus size={18} className="text-emerald-400" />
-                  <span>حساب جديد</span>
-                </button>
-              </div>
+              </>
             )}
           </div>
         </div>

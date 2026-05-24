@@ -8,12 +8,13 @@ export async function GET(req: Request) {
   try {
     // Try Auth.js v5 auth() first — most reliable
     const session = await auth();
-    if (session?.user?.email) {
+    if (session?.user && (session.user as any)?.phone) {
+      const phone = (session.user as any).phone;
       let dbUser = null;
       try {
         dbUser = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true, displayName: true, role: true },
+          where: { phone },
+          select: { id: true, displayName: true, role: true, fullName: true, name: true, isVerified: true, image: true },
         });
       } catch {
         // DB lookup failed — use session data only
@@ -22,11 +23,12 @@ export async function GET(req: Request) {
       return NextResponse.json({
         user: {
           id: dbUser?.id || (session.user as any).id || null,
-          name: session.user.name || null,
-          email: session.user.email,
-          image: session.user.image || null,
+          name: dbUser?.fullName || dbUser?.name || session.user.name || null,
+          phone: phone,
+          image: session.user.image || dbUser?.image || null,
           role: (session.user as any).role || dbUser?.role || 'user',
           displayName: (session.user as any).displayName || dbUser?.displayName || null,
+          isVerified: (session.user as any).isVerified || dbUser?.isVerified || false,
         },
       });
     }
@@ -50,7 +52,7 @@ export async function GET(req: Request) {
           : 'next-auth.session-token',
     });
 
-    if (!token?.email) {
+    if (!token?.phone) {
       return NextResponse.json({ user: null });
     }
 
@@ -58,8 +60,8 @@ export async function GET(req: Request) {
     let dbUser = null;
     try {
       dbUser = await prisma.user.findUnique({
-        where: { email: token.email as string },
-        select: { id: true, displayName: true, role: true },
+        where: { phone: token.phone as string },
+        select: { id: true, displayName: true, role: true, fullName: true, name: true, isVerified: true, image: true },
       });
     } catch {
       // DB lookup failed — use token data only
@@ -68,11 +70,12 @@ export async function GET(req: Request) {
     return NextResponse.json({
       user: {
         id: dbUser?.id || (token.id as string) || null,
-        name: (token.name as string) || null,
-        email: token.email as string,
-        image: (token.picture as string) || null,
+        name: dbUser?.fullName || dbUser?.name || (token.name as string) || null,
+        phone: token.phone as string,
+        image: (token.picture as string) || dbUser?.image || null,
         role: dbUser?.role || (token.role as string) || 'user',
         displayName: dbUser?.displayName || (token.displayName as string) || null,
+        isVerified: dbUser?.isVerified || (token.isVerified as boolean) || false,
       },
     });
   } catch (error) {

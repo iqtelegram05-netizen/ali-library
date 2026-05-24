@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppSession } from '@/hooks/useAppSession';
 import { useRouter } from 'next/navigation';
-import { signIn, signOut } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import {
   BookOpen, Users, Shield, Trash2, Crown,
@@ -60,7 +60,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      signIn('google', { callbackUrl: '/admin' });
+      // Don't auto-redirect — let user login manually
     }
   }, [status]);
 
@@ -731,7 +731,7 @@ export default function AdminPage() {
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#111827] rounded-xl">
                   <span className="text-gray-400 text-sm">المصادقة</span>
-                  <span className="text-gray-300 text-xs">Google OAuth + JWT</span>
+                  <span className="text-gray-300 text-xs">هاتف + كلمة السر + JWT</span>
                 </div>
               </div>
             </div>

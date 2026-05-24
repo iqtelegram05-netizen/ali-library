@@ -9,11 +9,19 @@ datasource db {
 
 model User {
   id            String   @id @default(cuid())
-  email         String   @unique
+  email         String?  @unique
+  phone         String?  @unique
   name          String?
+  fullName      String?
   displayName   String?
   image         String?
+  password      String?
+  address       String?
+  country       String?
+  idPhoto       String?
+  facePhoto     String?
   role          String   @default("user") // "owner", "admin", "user"
+  isVerified    Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   books         Book[]
