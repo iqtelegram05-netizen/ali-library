@@ -5,18 +5,13 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppSession } from '@/hooks/useAppSession';
 
-import { signOut } from 'next-auth/react';
-
-/* Custom sign-out using next-auth/react */
-function appSignOut() { signOut({ callbackUrl: '/' }); }
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
   Shield, ExternalLink, Send, FileText,
   BookMarked, Loader2, Menu, X, Star,
   ChevronLeft, ChevronRight, Heart, CheckCircle2, AlertTriangle,
-  Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bot, Bug,
-  ChevronDown, Layers, LogIn, LogOut, ShieldCheck, User, UserPlus, Settings, Crown,
-  HelpCircle
+  Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bug,
+  ChevronDown, Layers, ShieldCheck,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -39,7 +34,6 @@ import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
 import GeoHoverEffect from '@/components/GeoHoverEffect';
 import PageCustomizer from '@/components/PageCustomizer';
-import { LoginModal, RegisterModal, ForgotPasswordModal } from '@/components/AuthModals';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -141,7 +135,6 @@ const IMAMS_DATA: ImamData[] = [
 const NAV_ITEMS = [
   { id: 'hero', label: 'الرئيسية', icon: Globe },
   { id: 'books-archive', label: 'الكتب', icon: Library },
-  { id: 'teacher', label: 'الأستاذ', icon: Bot },
   { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
   { id: 'search', label: 'البحث المتطور', icon: Search },
 ];
@@ -150,7 +143,6 @@ const ADMIN_NAV_ITEMS = [
   { id: 'hero', label: 'الرئيسية', icon: Globe },
   { id: 'fetch-engine', label: 'إحضار الكتب', icon: BookType },
   { id: 'books-archive', label: 'الكتب', icon: Library },
-  { id: 'teacher', label: 'الأستاذ', icon: Bot },
   { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
   { id: 'search', label: 'البحث المتطور', icon: Search },
 ];
@@ -158,7 +150,6 @@ const ADMIN_NAV_ITEMS = [
 const HERO_BUTTONS = [
   { icon: BookType, label: 'إحضار الكتب', section: 'fetch-engine' },
   { icon: Library, label: 'الكتب', section: 'books-archive' },
-  { icon: Bot, label: 'الأستاذ', section: 'teacher' },
   { icon: Heart, label: 'سيرة آل محمد', section: 'biography' },
   { icon: Search, label: 'البحث المتطور', section: 'search' },
 ];
@@ -174,9 +165,6 @@ export default function Home() {
   const [showPortal, setShowPortal] = useState(true);
   const [books, setBooks] = useState<BookItem[]>([]);
   const [booksLoaded, setBooksLoaded] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const userRole = (session?.user as any)?.role || 'user';
   const isAdmin = userRole === 'owner' || userRole === 'admin';
@@ -246,11 +234,7 @@ export default function Home() {
         scrollToSection={scrollToSection}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
-        session={session}
         isAdmin={isAdmin}
-        onShowLogin={() => setShowLogin(true)}
-        onShowRegister={() => setShowRegister(true)}
-        onShowForgotPassword={() => setShowForgotPassword(true)}
       />
 
       {/* Mobile Menu Overlay */}
@@ -260,9 +244,6 @@ export default function Home() {
             scrollToSection={scrollToSection}
             setMobileMenuOpen={setMobileMenuOpen}
             isAdmin={isAdmin}
-            onShowLogin={() => setShowLogin(true)}
-            onShowRegister={() => setShowRegister(true)}
-            onShowForgotPassword={() => setShowForgotPassword(true)}
           />
         )}
       </AnimatePresence>
@@ -294,14 +275,7 @@ export default function Home() {
         >
           <BooksArchiveSection books={books} setBooks={setBooks} />
         </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <TeacherSection session={session} />
-        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -323,11 +297,6 @@ export default function Home() {
       {/* Footer */}
       <FooterSection />
 
-      {/* Auth Modals */}
-      <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} onSwitchToRegister={() => setShowRegister(true)} />
-      <RegisterModal isOpen={showRegister} onClose={() => setShowRegister(false)} onSwitchToLogin={() => setShowLogin(true)} />
-      <ForgotPasswordModal isOpen={showForgotPassword} onClose={() => setShowForgotPassword(false)} />
-
       {/* Page Customizer: Background, Text, Screenshot, Highlighting */}
       <PageCustomizer />
 
@@ -339,301 +308,12 @@ export default function Home() {
    NAVIGATION
    =================================================================== */
 
-/* ===================================================================
-   PROFILE EDIT MODAL
-   =================================================================== */
-
-function ProfileEditModal({ isOpen, onClose, session, onUpdate }: {
-  isOpen: boolean;
-  onClose: () => void;
-  session: any;
-  onUpdate: (data: any) => void;
-}) {
-  const [displayName, setDisplayName] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  useEffect(() => {
-    if (isOpen && session?.user) {
-      setDisplayName((session.user as any).displayName || session.user.name || '');
-      setError('');
-      setSuccess('');
-    }
-  }, [isOpen, session]);
-
-  const handleSave = async () => {
-    setError('');
-    setSuccess('');
-    if (!displayName.trim()) {
-      setError('يجب إدخال اسم');
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/user/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: displayName.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess('تم تحديث الاسم بنجاح');
-        onUpdate(data.user);
-        setTimeout(() => onClose(), 1000);
-      } else {
-        setError(data.error || 'فشل في تحديث الاسم');
-      }
-    } catch {
-      setError('فشل الاتصال بالخادم');
-    }
-    setSaving(false);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-    >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="relative bg-[#0d1117] border border-emerald-500/20 rounded-2xl p-6 w-full max-w-md shadow-2xl"
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-gray-100 font-bold text-lg flex items-center gap-2">
-            <User size={20} className="text-emerald-400" />
-            تعديل الملف الشخصي
-          </h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#1a1a2e] text-gray-400 hover:text-gray-100 transition-all">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 mb-4 p-3 bg-[#111827] rounded-xl">
-            {session?.user?.image && (
-              <img src={session.user.image} alt="" className="w-12 h-12 rounded-full border border-emerald-500/30" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-gray-400 text-xs">الحساب المرتبط</p>
-              <p className="text-gray-200 text-sm font-medium truncate">{session?.user?.name}</p>
-              <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session?.user as any)?.phone || session?.user?.email}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-gray-400 text-xs font-medium mb-1.5">الاسم المعروض في الموقع</label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              maxLength={50}
-              placeholder="أدخل اسمك الذي تريده أن يظهر للمستخدمين..."
-              className="w-full px-4 py-2.5 rounded-xl bg-[#111827] border border-emerald-500/20 text-gray-100 text-sm placeholder-gray-600 outline-none focus:border-emerald-500/50 transition-all"
-              dir="rtl"
-            />
-            <p className="text-gray-600 text-[10px] mt-1">هذا الاسم سيظهر للمستخدمين الآخرين</p>
-          </div>
-
-          {error && <p className="text-red-400 text-xs flex items-center gap-1"><AlertTriangle size={12} />{error}</p>}
-          {success && <p className="text-emerald-400 text-xs flex items-center gap-1"><CheckCircle2 size={12} />{success}</p>}
-
-          <div className="flex gap-2 pt-2">
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 text-sm font-medium transition-all disabled:opacity-50">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-              {saving ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
-            </button>
-            <button onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-[#111827] border border-gray-700/50 text-gray-400 hover:text-gray-200 text-sm transition-all">
-              إلغاء
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-/* ===================================================================
-   AUTH MENU (Login / Register / User Dropdown)
-   =================================================================== */
-
-function AuthMenu({ session, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: { session: any; isAdmin: boolean; onShowLogin: () => void; onShowRegister: () => void; onShowForgotPassword: () => void; }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const router = useRouter();
-  const userRole = (session?.user as any)?.role || 'user';
-  const displayName = (session?.user as any)?.displayName || null;
-  const displayedName = displayName || session?.user?.name || 'مستخدم';
-
-  const roleLabels: Record<string, string> = {
-    owner: 'المالك',
-    admin: 'مشرف',
-    user: 'عضو',
-  };
-  const roleColors: Record<string, string> = {
-    owner: 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20',
-    admin: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    user: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  };
-
-  // Close menu on outside click — ALWAYS called (before conditional return)
-  useEffect(() => {
-    const handler = () => setMenuOpen(false);
-    if (menuOpen) document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [menuOpen]);
-
-  // Logged out state: Show Login + Register buttons
-  if (!session?.user) {
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={onShowRegister}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 hover:border-gray-600/50 transition-all"
-        >
-          <UserPlus size={14} className="text-emerald-400" />
-          <span className="hidden sm:inline">حساب جديد</span>
-        </button>
-        <button
-          onClick={onShowLogin}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
-        >
-          <LogIn size={14} />
-          <span className="hidden sm:inline">تسجيل الدخول</span>
-        </button>
-        <button
-          onClick={onShowForgotPassword}
-          className="p-1.5 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all"
-          title="نسيت كلمة السر؟"
-        >
-          <HelpCircle size={14} />
-        </button>
-      </div>
-    );
-  }
-
-  // Logged in state: User avatar dropdown
-  return (
-    <>
-      <div className="relative">
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-[#1a1a2e] border border-emerald-500/15 hover:border-emerald-500/30 transition-all"
-        >
-          {session.user.image ? (
-            <img src={session.user.image} alt="" className="w-7 h-7 rounded-full border border-emerald-500/30" />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-              <User size={14} className="text-emerald-400" />
-            </div>
-          )}
-          <span className="text-gray-200 text-xs font-medium hidden sm:block max-w-[100px] truncate">{displayedName}</span>
-          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border hidden sm:inline-block ${roleColors[userRole] || roleColors.user}`}>
-            {roleLabels[userRole] || 'عضو'}
-          </span>
-          <ChevronDown size={12} className={`text-gray-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="absolute left-0 mt-2 w-60 sm:w-64 bg-[#0d1117]/98 border border-emerald-500/15 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden z-[60]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* User Info Header */}
-              <div className="p-4 border-b border-emerald-500/10">
-                <div className="flex items-center gap-3">
-                  {session.user.image ? (
-                    <img src={session.user.image} alt="" className="w-10 h-10 rounded-full border border-emerald-500/30" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                      <User size={18} className="text-emerald-400" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
-                    <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session.user as any)?.phone || session.user.email}</p>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border mt-1 inline-block ${roleColors[userRole] || roleColors.user}`}>
-                      {roleLabels[userRole] || 'عضو'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Menu Items */}
-              <div className="p-2">
-                <button
-                  onClick={() => { setShowProfileEdit(true); setMenuOpen(false); }}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-300 hover:bg-[#1a1a2e] hover:text-gray-100 transition-all text-sm"
-                >
-                  <User size={16} className="text-emerald-400" />
-                  <span>تعديل الملف الشخصي</span>
-                </button>
-
-                {isAdmin && (
-                  <button
-                    onClick={() => { router.push('/admin'); setMenuOpen(false); }}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-all text-sm"
-                  >
-                    <ShieldCheck size={16} />
-                    <span>لوحة التحكم</span>
-                  </button>
-                )}
-
-                <div className="border-t border-emerald-500/10 my-1" />
-
-                <button
-                  onClick={() => { appSignOut(); setMenuOpen(false); }}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm"
-                >
-                  <LogOut size={16} />
-                  <span>تسجيل الخروج</span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <ProfileEditModal
-        isOpen={showProfileEdit}
-        onClose={() => setShowProfileEdit(false)}
-        session={session}
-        onUpdate={(data) => {
-          // Update session after profile edit
-          const updateData: any = { displayName: data.displayName };
-          if (data.name) updateData.name = data.name;
-        }}
-      />
-    </>
-  );
-}
-
-/* ===================================================================
-   NAVIGATION
-   =================================================================== */
-
-function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, session, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: {
+function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, isAdmin }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
-  session: any;
   isAdmin: boolean;
-  onShowLogin: () => void;
-  onShowRegister: () => void;
-  onShowForgotPassword: () => void;
 }) {
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const router = useRouter();
@@ -693,7 +373,6 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             )}
           </div>
           <div className="flex items-center gap-2">
-            <AuthMenu session={session} isAdmin={isAdmin} onShowLogin={onShowLogin} onShowRegister={onShowRegister} onShowForgotPassword={onShowForgotPassword} />
             <button
               className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -707,43 +386,19 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
   );
 }
 
-function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, onShowLogin, onShowRegister, onShowForgotPassword }: {
+function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
   scrollToSection: (id: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
-  onShowLogin: () => void;
-  onShowRegister: () => void;
-  onShowForgotPassword: () => void;
 }) {
-  const { session } = useAppSession();
   const router = useRouter();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
-  const userRole = (session?.user as any)?.role || 'user';
-  const displayName = (session?.user as any)?.displayName || null;
-  const displayedName = displayName || session?.user?.name || 'مستخدم';
 
   return (
     <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed inset-0 z-40 lg:hidden">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
       <div className="absolute top-16 left-0 right-0 bg-[#0d1117]/95 backdrop-blur-xl border-b border-emerald-500/15 p-4">
         <div className="flex flex-col gap-1">
-          {/* Mobile User Info */}
-          {session?.user && (
-            <div className="flex items-center gap-3 px-4 py-3 mb-2 bg-[#111827] rounded-xl">
-              {session.user.image ? (
-                <img src={session.user.image} alt="" className="w-10 h-10 rounded-full border border-emerald-500/30" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                  <User size={18} className="text-emerald-400" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-100 text-sm font-bold truncate">{displayedName}</p>
-                <p className="text-gray-500 text-[10px] truncate" dir="ltr">{(session.user as any)?.phone || session.user.email}</p>
-              </div>
-            </div>
-          )}
-
           {navItems.map(item => {
             const Icon = item.icon;
             return (
@@ -761,42 +416,7 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, onShowLogin, 
               <span>لوحة التحكم</span>
             </button>
           )}
-          <div className="border-t border-emerald-500/10 mt-2 pt-2">
-            {session?.user ? (
-              <>
-                <button onClick={() => { setMobileMenuOpen(false); }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 transition-all text-sm font-medium w-full text-right">
-                  <User size={18} />
-                  <span>تعديل الملف الشخصي</span>
-                </button>
-                <button onClick={() => appSignOut()}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium w-full text-right">
-                  <LogOut size={18} />
-                  <span>تسجيل الخروج</span>
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="flex gap-2">
-                  <button onClick={() => { setMobileMenuOpen(false); onShowLogin(); }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all text-sm font-medium">
-                    <LogIn size={18} />
-                    <span>تسجيل الدخول</span>
-                  </button>
-                  <button onClick={() => { setMobileMenuOpen(false); onShowRegister(); }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-gray-300 hover:bg-[#1a1a2e] border border-gray-700/50 transition-all text-sm font-medium">
-                    <UserPlus size={18} className="text-emerald-400" />
-                    <span>حساب جديد</span>
-                  </button>
-                </div>
-                <button onClick={() => { setMobileMenuOpen(false); onShowForgotPassword(); }}
-                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-all text-xs font-medium w-full mt-2">
-                  <HelpCircle size={14} />
-                  <span>نسيت كلمة السر؟ تواصل مع الدعم</span>
-                </button>
-              </>
-            )}
-          </div>
+
         </div>
       </div>
     </motion.div>
@@ -1574,185 +1194,6 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
             </p>
           </motion.div>
         )}
-      </div>
-    </section>
-  );
-}
-
-/* ===================================================================
-   TEACHER SECTION — الأستاذ (Gemini 1.5 Pro + Mermaid Mind Maps)
-   =================================================================== */
-
-interface TeacherMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  mindmap?: string;
-}
-
-function TeacherSection({ session }: { session: any }) {
-  const [messages, setMessages] = useState<TeacherMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
-  // إذا لم يكن المستخدم مسجلاً، عرض رسالة تسجيل الدخول
-  if (!session?.user) {
-    return (
-      <section id="teacher" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-        <div className="section-divider mb-10 sm:mb-20" />
-        <div className="max-w-3xl mx-auto">
-          <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم متخصص في الدراسات الإسلامية والفكر الشيعي — مدعوم بـ Gemini 1.5 Pro" />
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 sm:mt-8 bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-5 sm:p-12 backdrop-blur-xl text-center"
-          >
-            <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 w-fit mx-auto mb-4">
-              <Bot size={36} className="text-emerald-400" />
-            </div>
-            <h3 className="text-gray-100 font-bold text-lg mb-2">تسجيل الدخول مطلوب</h3>
-            <p className="text-gray-400 text-sm mb-6">لاستخدام خاصية الأستاذ الذكي، يجب عليك تسجيل الدخول بحساب Google أولاً.</p>
-            <button
-              onClick={() => appSignIn()}
-              className="btn-green px-6 py-3 rounded-xl text-white font-medium text-sm flex items-center gap-2 mx-auto"
-            >
-              <LogIn size={16} />
-              <span>تسجيل الدخول بحساب Google</span>
-            </button>
-          </motion.div>
-        </div>
-      </section>
-    );
-  }
-
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg: TeacherMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/teacher', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: input.trim(), messages: messages.map(m => ({ role: m.role, content: m.content })) }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: data.answer || '',
-          mindmap: data.mindmap || '',
-        }]);
-      } else {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: data.error || 'حدث خطأ',
-        }]);
-      }
-    } catch (e: any) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `خطأ في الاتصال: ${e.message}`,
-      }]);
-    }
-    setLoading(false);
-  };
-
-  const suggestedQuestions = [
-    'ما هي أدلة الإمامة من القرآن الكريم؟',
-    'اشرح مسألة التوحيد بتفصيل مع خريطة ذهنية',
-    'ما الفرق بين التشيع والفرق الإسلامية الأخرى؟',
-    'وضح فلسفة العدل الإلهي في الفكر الشيعي',
-  ];
-
-  return (
-    <section id="teacher" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
-      <div className="section-divider mb-10 sm:mb-20" />
-      <div className="max-w-4xl mx-auto">
-        <SectionHeader icon={Bot} title="الأستاذ الذكي" subtitle="معلم ذكي يعتمد على Gemini 1.5 Pro — يقدم إجابات عميقة مع خرائط ذهنية تفاعلية" />
-        <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-6 sm:mt-8 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/20">
-          <div className="h-[300px] sm:h-[500px] overflow-y-auto p-3 sm:p-6 space-y-4" style={{ backgroundColor: '#080812' }}>
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center gap-4">
-                <div className="p-4 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/20">
-                  <Bot size={40} className="text-[#D4AF37]" />
-                </div>
-                <div>
-                  <p className="text-gray-100 font-medium mb-2">الأستاذ الذكي</p>
-                  <p className="text-gray-500 text-sm max-w-md">مرحباً بك. أنا معلمك الذكي المتخصص في الدراسات الإسلامية والفكر الشيعي. اسألني وسأقدم لك إجابة مفصلة مع خريطة ذهنية تفاعلية.</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4 w-full max-w-lg">
-                  {suggestedQuestions.map((q, i) => (
-                    <button key={i} onClick={() => setInput(q)} className="px-3 py-2 rounded-lg bg-[#0d1117] border border-[#D4AF37]/15 text-gray-300 text-xs hover:border-[#D4AF37]/30 transition-all text-right">{q}</button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((msg) => (
-                  <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`max-w-[92%] sm:max-w-[85%] ${msg.role === 'user' ? 'mr-auto' : 'ml-auto'}`}>
-                    <div className={`p-3 sm:p-4 ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
-                      {msg.role === 'assistant' && (
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <div className="p-1 rounded-full bg-[#D4AF37]/10">
-                            <Bot size={12} className="text-[#D4AF37]" />
-                          </div>
-                          <span className="text-[#D4AF37] text-[11px] font-medium">الأستاذ الذكي</span>
-                        </div>
-                      )}
-                      <div className="text-gray-200 text-sm leading-relaxed prose prose-sm max-w-none prose-invert prose-headings:text-emerald-300 prose-headings:font-bold prose-p:text-gray-300 prose-strong:text-[#D4AF37] prose-blockquote:border-emerald-500/30 prose-blockquote:text-gray-400 prose-li:text-gray-300 prose-hr:border-emerald-500/20">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      </div>
-                      {msg.mindmap && (
-                        <div className="mt-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Sparkles size={14} className="text-emerald-400" />
-                            <span className="text-emerald-400 text-xs font-medium">الخريطة الذهنية</span>
-                          </div>
-                          <LazyMermaidRenderer chart={msg.mindmap} />
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-                {loading && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-[92%] sm:max-w-[85%] ml-auto">
-                    <div className="chat-ai p-3 sm:p-4">
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <div className="p-1 rounded-full bg-[#D4AF37]/10"><Bot size={12} className="text-[#D4AF37]" /></div>
-                        <span className="text-[#D4AF37] text-[11px] font-medium">الأستاذ الذكي</span>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
-                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
-                        <div className="w-2 h-2 rounded-full bg-[#D4AF37] typing-dot" />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-                <div ref={chatEndRef} />
-              </>
-            )}
-          </div>
-          <div className="border-t border-emerald-500/10 p-4 bg-[#0d1117]">
-            <div className="flex gap-3">
-              <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="اسأل الأستاذ أي سؤال حول الدراسات الإسلامية..."
-                className="flex-1 px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all resize-none leading-relaxed" rows={1} style={{ minHeight: '44px', maxHeight: '120px' }} />
-              <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-green p-3 rounded-xl text-white disabled:opacity-50 transition-all shrink-0">
-                <Send size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );
