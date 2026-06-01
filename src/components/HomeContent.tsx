@@ -34,6 +34,7 @@ import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
 import GeoHoverEffect from '@/components/GeoHoverEffect';
 import PageCustomizer from '@/components/PageCustomizer';
+import AuthModals from '@/components/AuthModals';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -159,7 +160,7 @@ const HERO_BUTTONS = [
    =================================================================== */
 
 export default function Home() {
-  const { session, status } = useAppSession();
+  const { session, status, refresh: refreshSession } = useAppSession();
   const [activeSection, setActiveSection] = useState('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPortal, setShowPortal] = useState(true);
@@ -235,6 +236,7 @@ export default function Home() {
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         isAdmin={isAdmin}
+        session={session}
       />
 
       {/* Mobile Menu Overlay */}
@@ -244,6 +246,7 @@ export default function Home() {
             scrollToSection={scrollToSection}
             setMobileMenuOpen={setMobileMenuOpen}
             isAdmin={isAdmin}
+            session={session}
           />
         )}
       </AnimatePresence>
@@ -308,13 +311,15 @@ export default function Home() {
    NAVIGATION
    =================================================================== */
 
-function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, isAdmin }: {
+function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, isAdmin, session }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
+  session: any;
 }) {
+  const { refresh: refreshSession } = useAppSession();
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const router = useRouter();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
@@ -373,6 +378,10 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Auth Buttons - Desktop */}
+            <div className="hidden lg:block">
+              <AuthModals session={session} onRefresh={refreshSession} />
+            </div>
             <button
               className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -386,12 +395,14 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
   );
 }
 
-function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
+function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, session }: {
   scrollToSection: (id: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
+  session: any;
 }) {
   const router = useRouter();
+  const { refresh: refreshSession } = useAppSession();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
 
   return (
@@ -417,6 +428,10 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
             </button>
           )}
 
+          {/* Mobile Auth Buttons */}
+          <div className="border-t border-emerald-500/10 mt-2 pt-2">
+            <AuthModals session={session} onRefresh={refreshSession} />
+          </div>
         </div>
       </div>
     </motion.div>

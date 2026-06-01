@@ -3,8 +3,9 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 /* ===================================================================
-   Registration API — Phone-based account creation.
-   Requires: phone, password, fullName, address, country, idPhoto, facePhoto
+   Registration API — Simplified for Al-Ali Digital Library.
+   Only requires: phone, password, fullName.
+   address, country, idPhoto, facePhoto are optional.
    =================================================================== */
 
 export async function POST(req: Request) {
@@ -12,11 +13,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { phone, password, fullName, address, country, idPhoto, facePhoto } = body;
 
-    // Validation
-    if (!phone || !password || !fullName || !address || !country || !idPhoto || !facePhoto) {
+    // Validation — only phone, password, and fullName are required
+    if (!phone || !password || !fullName) {
       return NextResponse.json({
         success: false,
-        error: 'جميع الحقول مطلوبة: رقم الهاتف، كلمة السر، الاسم الثلاثي، مكان السكن، البلد، صورة الهوية، صورة الوجه',
+        error: 'يرجى إدخال رقم الهاتف وكلمة السر والاسم الكامل',
       }, { status: 400 });
     }
 
@@ -39,23 +40,23 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // Validate fullName (at least 3 words)
+    // Validate fullName (at least 2 words)
     const nameWords = fullName.trim().split(/\s+/);
     if (nameWords.length < 2) {
       return NextResponse.json({
         success: false,
-        error: 'يرجى إدخال الاسم الثلاثي (الاسم الأول والأخير على الأقل).',
+        error: 'يرجى إدخال الاسم الكامل (الاسم الأول والأخير على الأقل).',
       }, { status: 400 });
     }
 
-    // Validate photos are base64 strings
-    if (!idPhoto.startsWith('data:image/') || idPhoto.length > 5 * 1024 * 1024) {
+    // Validate optional photos if provided
+    if (idPhoto && (!idPhoto.startsWith('data:image/') || idPhoto.length > 5 * 1024 * 1024)) {
       return NextResponse.json({
         success: false,
         error: 'صورة الهوية غير صالحة أو حجمها أكبر من 5 ميجابايت.',
       }, { status: 400 });
     }
-    if (!facePhoto.startsWith('data:image/') || facePhoto.length > 5 * 1024 * 1024) {
+    if (facePhoto && (!facePhoto.startsWith('data:image/') || facePhoto.length > 5 * 1024 * 1024)) {
       return NextResponse.json({
         success: false,
         error: 'صورة الوجه غير صالحة أو حجمها أكبر من 5 ميجابايت.',
@@ -88,12 +89,12 @@ export async function POST(req: Request) {
         password: hashedPassword,
         fullName: fullName.trim(),
         name: fullName.trim(),
-        address: address.trim(),
-        country: country.trim(),
-        idPhoto,
-        facePhoto,
+        address: address?.trim() || null,
+        country: country?.trim() || null,
+        idPhoto: idPhoto || null,
+        facePhoto: facePhoto || null,
         role: isOwner ? 'owner' : 'user',
-        isVerified: false, // Will be verified by admin
+        isVerified: false,
       },
       select: {
         id: true,
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'تم إنشاء الحساب بنجاح! سيتم مراجعة بياناتك من قبل الإدارة.',
+      message: 'تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.',
       user,
     });
   } catch (error: any) {
