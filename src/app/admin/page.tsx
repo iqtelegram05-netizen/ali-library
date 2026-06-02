@@ -9,7 +9,7 @@ import {
   CheckCircle2, Settings, UserPlus, Pencil, X,
   Eye, Database, Activity, TrendingUp, Search,
   Save, BarChart3, Globe, UserCog, Key, Lock,
-  Zap, Sparkles, BookMarked, FileText, Bug,
+  Zap, Sparkles, BookMarked, FileText, Bug, CheckSquare, Square, Trash,
 } from 'lucide-react';
 
 interface BookData {
@@ -72,6 +72,13 @@ export default function AdminPage() {
   const [editBookCategory, setEditBookCategory] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string; error?: string } | null>(null);
+
+  // Bulk delete state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('');
 
   // Fetch engine state
   const [bookName, setBookName] = useState('');
@@ -169,6 +176,86 @@ export default function AdminPage() {
         showToast('تم حذف الكتاب بنجاح', 'success');
       }
     } catch (e) { console.error(e); }
+  };
+
+  const toggleBookSelect = (id: string) => {
+    setSelectedBooks(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllBooks = () => {
+    if (selectedBooks.size === filteredBooks.length) {
+      setSelectedBooks(new Set());
+    } else {
+      setSelectedBooks(new Set(filteredBooks.map(b => b.id)));
+    }
+  };
+
+  const bulkDeleteSelected = async () => {
+    if (selectedBooks.size === 0) return;
+    setBulkDeleteLoading(true);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'DELETE',
+        headers: getAdminHeaders(),
+        body: JSON.stringify({ ids: Array.from(selectedBooks) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks(prev => prev.filter(b => !selectedBooks.has(b.id)));
+        setSelectedBooks(new Set());
+        setSelectMode(false);
+        showToast(`تم حذف ${data.deletedCount} كتاب بنجاح`, 'success');
+      } else {
+        showToast(data.error || 'فشل في الحذف', 'error');
+      }
+    } catch { showToast('فشل الاتصال بالخادم', 'error'); }
+    setBulkDeleteLoading(false);
+  };
+
+  const deleteByCategory = async (cat: string) => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'DELETE',
+        headers: getAdminHeaders(),
+        body: JSON.stringify({ category: cat }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks(prev => prev.filter(b => b.category !== cat));
+        showToast(`تم حذف ${data.deletedCount} كتاب من تصنيف ${CATEGORY_LABELS[cat] || cat}`, 'success');
+      } else {
+        showToast(data.error || 'فشل في الحذف', 'error');
+      }
+    } catch { showToast('فشل الاتصال بالخادم', 'error'); }
+    setBulkDeleteLoading(false);
+    setFilterCategory('');
+  };
+
+  const deleteAllBooks = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'DELETE',
+        headers: getAdminHeaders(),
+        body: JSON.stringify({ deleteAll: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks([]);
+        setSelectedBooks(new Set());
+        setSelectMode(false);
+        setShowDeleteAllConfirm(false);
+        showToast(`تم حذف ${data.deletedCount} كتاب بنجاح`, 'success');
+      } else {
+        showToast(data.error || 'فشل في الحذف', 'error');
+      }
+    } catch { showToast('فشل الاتصال بالخادم', 'error'); }
+    setBulkDeleteLoading(false);
   };
 
   const updateUserRole = async (userId: string, newRole: string) => {
@@ -782,9 +869,9 @@ export default function AdminPage() {
         {/* ===== BOOKS TAB ===== */}
         {activeTab === 'books' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {/* Search */}
-            <div className="mb-4">
-              <div className="relative">
+            {/* Search + Bulk Actions Bar */}
+            <div className="mb-4 flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
                 <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   type="text"
@@ -795,18 +882,114 @@ export default function AdminPage() {
                   dir="rtl"
                 />
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => { setSelectMode(!selectMode); setSelectedBooks(new Set()); }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                    selectMode
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-[#0d1117] border-emerald-500/15 text-gray-400 hover:text-gray-200 hover:border-emerald-500/25'
+                  }`}>
+                  <CheckSquare size={14} />
+                  <span>{selectMode ? 'إلغاء التحديد' : 'تحديد متعدد'}</span>
+                </button>
+                <button onClick={() => { setShowDeleteAllConfirm(true); setSelectMode(false); setSelectedBooks(new Set()); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
+                >
+                  <Trash size={14} />
+                  <span>حذف الكل</span>
+                </button>
+              </div>
             </div>
+
+            {/* Delete All Confirmation */}
+            <AnimatePresence>
+              {showDeleteAllConfirm && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                  className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-red-400 font-bold text-sm">تأكيد حذف جميع الكتب ({books.length})</p>
+                      <p className="text-red-300/60 text-xs mt-1">هذا الإجراء لا يمكن التراجع عنه! سيتم حذف جميع الكتب نهائياً.</p>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button onClick={deleteAllBooks} disabled={bulkDeleteLoading}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-all disabled:opacity-50">
+                          {bulkDeleteLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          <span>نعم، احذف الكل</span>
+                        </button>
+                        <button onClick={() => setShowDeleteAllConfirm(false)}
+                          className="px-4 py-2 rounded-xl bg-gray-500/10 text-gray-400 text-xs hover:bg-gray-500/20 border border-gray-500/20 transition-all">
+                          إلغاء
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Category Delete Filter */}
+            {filterCategory && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 rounded-2xl bg-[#D4AF37]/5 border border-[#D4AF37]/15 flex items-center justify-between">
+                <span className="text-[#D4AF37] text-xs">سيتم حذف كتب تصنيف: <b>{CATEGORY_LABELS[filterCategory] || filterCategory}</b> ({categoryCounts[filterCategory] || 0} كتاب)</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => deleteByCategory(filterCategory)} disabled={bulkDeleteLoading}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-xs font-medium hover:bg-red-500/25 disabled:opacity-50 transition-all">
+                    {bulkDeleteLoading ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    <span>حذف التصنيف</span>
+                  </button>
+                  <button onClick={() => setFilterCategory('')}
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-500/10 transition-all">
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Selected Books Action Bar */}
+            {selectMode && selectedBooks.size > 0 && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 flex items-center justify-between">
+                <span className="text-emerald-400 text-xs">تم تحديد <b>{selectedBooks.size}</b> كتاب</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={selectAllBooks}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-400 text-xs hover:text-gray-200 hover:bg-gray-500/10 border border-gray-500/15 transition-all">
+                    <CheckSquare size={12} />
+                    <span>{selectedBooks.size === filteredBooks.length ? 'إلغاء الكل' : 'تحديد الكل'}</span>
+                  </button>
+                  <button onClick={bulkDeleteSelected} disabled={bulkDeleteLoading}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-xs font-medium hover:bg-red-500/25 disabled:opacity-50 transition-all">
+                    {bulkDeleteLoading ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    <span>حذف المحدد ({selectedBooks.size})</span>
+                  </button>
+                  <button onClick={() => setSelectedBooks(new Set())}
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-500/10 transition-all">
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
 
             <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl overflow-hidden backdrop-blur-xl">
               <div className="px-5 py-4 border-b border-emerald-500/10 flex items-center justify-between">
                 <h2 className="text-gray-100 font-bold">جميع الكتب ({filteredBooks.length})</h2>
-                <button
-                  onClick={() => { setActiveTab('dashboard'); router.push('/#fetch-engine'); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
-                >
-                  <Eye size={14} />
-                  المحرك
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setActiveTab('dashboard'); router.push('/#fetch-engine'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
+                  >
+                    <Eye size={14} />
+                    المحرك
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('fetch'); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#D4AF37] hover:bg-[#D4AF37]/10 border border-[#D4AF37]/20 transition-all"
+                  >
+                    <Zap size={14} />
+                    جلب كتب
+                  </button>
+                </div>
               </div>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -822,6 +1005,12 @@ export default function AdminPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-emerald-500/10">
+                        {selectMode && (
+                          <th className="text-right px-3 py-3 w-10">
+                            <input type="checkbox" checked={selectedBooks.size === filteredBooks.length && filteredBooks.length > 0}
+                              onChange={selectAllBooks} className="w-4 h-4 rounded accent-emerald-500 cursor-pointer" />
+                          </th>
+                        )}
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3">#</th>
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3">اسم الكتاب</th>
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3 hidden sm:table-cell">التصنيف</th>
@@ -831,7 +1020,14 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {filteredBooks.map((book, i) => (
-                        <tr key={book.id} className="border-b border-emerald-500/5 hover:bg-emerald-500/5 transition-colors">
+                        <tr key={book.id} className={`border-b border-emerald-500/5 transition-colors ${selectedBooks.has(book.id) ? 'bg-emerald-500/8' : 'hover:bg-emerald-500/5'}`}>
+                          {selectMode && (
+                            <td className="px-3 py-3">
+                              <input type="checkbox" checked={selectedBooks.has(book.id)}
+                                onChange={() => toggleBookSelect(book.id)}
+                                className="w-4 h-4 rounded accent-emerald-500 cursor-pointer" />
+                            </td>
+                          )}
                           <td className="px-5 py-3 text-gray-500 text-xs">{i + 1}</td>
                           <td className="px-5 py-3">
                             {editBookId === book.id ? (
@@ -849,21 +1045,29 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td className="px-5 py-3 hidden sm:table-cell">
-                            {editBookId === book.id ? (
-                              <select
-                                value={editBookCategory}
-                                onChange={(e) => setEditBookCategory(e.target.value)}
-                                className="bg-[#111827] border border-emerald-500/30 text-gray-300 text-xs rounded-lg px-2 py-1 outline-none"
-                              >
-                                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                                  <option key={k} value={k}>{v}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
-                                {CATEGORY_LABELS[book.category] || book.category}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {editBookId === book.id ? (
+                                <select
+                                  value={editBookCategory}
+                                  onChange={(e) => setEditBookCategory(e.target.value)}
+                                  className="bg-[#111827] border border-emerald-500/30 text-gray-300 text-xs rounded-lg px-2 py-1 outline-none"
+                                >
+                                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                                    <option key={k} value={k}>{v}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 cursor-pointer hover:bg-red-500/10 hover:text-red-400 transition-all"
+                                    onClick={() => setFilterCategory(book.category)} title="اضغط لحذف هذا التصنيف">
+                                    {CATEGORY_LABELS[book.category] || book.category}
+                                  </span>
+                                  <button onClick={() => setFilterCategory(book.category)} className="p-1 rounded text-gray-600 hover:text-red-400 transition-all" title="حذف هذا التصنيف">
+                                    <Trash2 size={10} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3 text-gray-500 text-xs hidden md:table-cell">
                             {new Date(book.createdAt).toLocaleDateString('ar')}
