@@ -105,10 +105,19 @@ export async function POST(req: Request) {
       }
     } catch (dbErr: any) {
       console.error('[REGISTER] findUnique error:', dbErr?.message);
-      return NextResponse.json({
-        success: false,
-        error: 'خطأ في البحث عن المستخدم. قد لا تكون قاعدة البيانات متصلة.',
-      }, { status: 503 });
+      const errMsg = String(dbErr?.message || dbErr);
+      // If phone column or unique constraint doesn't exist, skip the check and try create directly
+      if (errMsg.includes('does not exist') || errMsg.includes('No such column') || errMsg.includes('P2021') || errMsg.includes('P2022')) {
+        console.log('[REGISTER] findUnique failed — column may not exist, skipping duplicate check');
+      } else if (errMsg.includes('ECONNREFUSED') || errMsg.includes('ENOTFOUND') || errMsg.includes('connect') || errMsg.includes('timeout')) {
+        return NextResponse.json({
+          success: false,
+          error: 'قاعدة البيانات غير متصلة. تأكد من تعيين POSTGRES_URL في إعدادات Vercel.',
+          detail: errMsg.substring(0, 200),
+        }, { status: 503 });
+      } else {
+        console.log('[REGISTER] Unexpected findUnique error, continuing...');
+      }
     }
 
     // Hash password
