@@ -5,13 +5,12 @@ import bcrypt from 'bcryptjs';
 /* ===================================================================
    Registration API — Simplified for Al-Ali Digital Library.
    Only requires: phone, password, fullName.
-   address, country, idPhoto, facePhoto are optional.
    =================================================================== */
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { phone, password, fullName, address, country, idPhoto, facePhoto } = body;
+    const { phone, password, fullName } = body;
 
     // Validation — only phone, password, and fullName are required
     if (!phone || !password || !fullName) {
@@ -49,30 +48,24 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // Validate optional photos if provided
-    if (idPhoto && (!idPhoto.startsWith('data:image/') || idPhoto.length > 5 * 1024 * 1024)) {
-      return NextResponse.json({
-        success: false,
-        error: 'صورة الهوية غير صالحة أو حجمها أكبر من 5 ميجابايت.',
-      }, { status: 400 });
-    }
-    if (facePhoto && (!facePhoto.startsWith('data:image/') || facePhoto.length > 5 * 1024 * 1024)) {
-      return NextResponse.json({
-        success: false,
-        error: 'صورة الوجه غير صالحة أو حجمها أكبر من 5 ميجابايت.',
-      }, { status: 400 });
-    }
-
     // Check if phone already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { phone: cleanPhone },
-    });
+    try {
+      const existingUser = await prisma.user.findUnique({
+        where: { phone: cleanPhone },
+      });
 
-    if (existingUser) {
+      if (existingUser) {
+        return NextResponse.json({
+          success: false,
+          error: 'رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول بدلاً من ذلك.',
+        }, { status: 409 });
+      }
+    } catch (dbErr: any) {
+      console.error('[REGISTER] DB findUnique error:', dbErr?.message || dbErr);
       return NextResponse.json({
         success: false,
-        error: 'رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول بدلاً من ذلك.',
-      }, { status: 409 });
+        error: 'خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة لاحقاً.',
+      }, { status: 503 });
     }
 
     // Hash password
@@ -82,29 +75,75 @@ export async function POST(req: Request) {
     const ownerPhone = process.env.OWNER_PHONE;
     const isOwner = ownerPhone && cleanPhone === ownerPhone.replace(/[\s\-\(\)]/g, '');
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
+    // Create user — only use core fields to avoid schema mismatch
+    let user;
+    try {
+      const createData: Record<string, any> = {
         phone: cleanPhone,
         password: hashedPassword,
         fullName: fullName.trim(),
         name: fullName.trim(),
-        address: address?.trim() || null,
-        country: country?.trim() || null,
-        idPhoto: idPhoto || null,
-        facePhoto: facePhoto || null,
         role: isOwner ? 'owner' : 'user',
         isVerified: false,
-      },
-      select: {
-        id: true,
-        phone: true,
-        fullName: true,
-        role: true,
-        isVerified: true,
-        createdAt: true,
-      },
-    });
+      };
+
+      user = await prisma.user.create({
+        data: createData,
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          role: true,
+          isVerified: true,
+          createdAt: true,
+        },
+      });
+    } catch (createErr: any) {
+      console.error('[REGISTER] DB create error:', createErr?.message || createErr);
+
+      // Handle unique constraint violation
+      if (createErr?.code === 'P2002') {
+        return NextResponse.json({
+          success: false,
+          error: 'رقم الهاتف مسجل مسبقاً. يرجى تسجيل الدخول بدلاً من ذلك.',
+        }, { status: 409 });
+      }
+
+      // Handle missing column/field errors
+      const errMsg = String(createErr?.message || createErr);
+      if (errMsg.includes('does not exist') || errMsg.includes('column') || errMsg.includes('field')) {
+        console.error('[REGISTER] Schema mismatch detected — attempting minimal create...');
+        try {
+          user = await prisma.user.create({
+            data: {
+              phone: cleanPhone,
+              password: hashedPassword,
+              name: fullName.trim(),
+              role: isOwner ? 'owner' : 'user',
+            },
+            select: {
+              id: true,
+              phone: true,
+              fullName: true,
+              role: true,
+              isVerified: true,
+              createdAt: true,
+            },
+          });
+        } catch (retryErr: any) {
+          console.error('[REGISTER] Minimal create also failed:', retryErr?.message || retryErr);
+          return NextResponse.json({
+            success: false,
+            error: 'خطأ في قاعدة البيانات. يرجى المحاولة لاحقاً.',
+          }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({
+          success: false,
+          error: 'خطأ أثناء إنشاء الحساب: ' + (errMsg.substring(0, 100)),
+        }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({
       success: true,
