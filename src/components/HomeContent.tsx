@@ -358,18 +358,16 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
                 </button>
               );
             })}
-            {/* Admin Dashboard Link */}
-            {isAdmin && (
-              <button
-                onClick={() => router.push('/admin')}
-                onMouseEnter={() => setHoveredNav('admin')}
-                onMouseLeave={() => setHoveredNav(null)}
-                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37]/10 overflow-hidden"
-              >
-                <ShieldCheck size={14} className="relative z-10" />
-                <span className="relative z-10">لوحة التحكم</span>
-              </button>
-            )}
+            {/* Admin Dashboard Link — always visible */}
+            <button
+              onClick={() => router.push('/admin')}
+              onMouseEnter={() => setHoveredNav('admin')}
+              onMouseLeave={() => setHoveredNav(null)}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border overflow-hidden ${isAdmin ? 'border-[#D4AF37]/20 text-[#D4AF37] hover:bg-[#D4AF37]/10' : 'border-emerald-500/10 text-gray-500 hover:text-gray-300 hover:border-emerald-500/20'}`}
+            >
+              <ShieldCheck size={14} className="relative z-10" />
+              <span className="relative z-10">لوحة التحكم</span>
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -408,13 +406,11 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
               </button>
             );
           })}
-          {isAdmin && (
-            <button onClick={() => { router.push('/admin'); setMobileMenuOpen(false); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#D4AF37] hover:bg-[#1a1a2e] transition-all text-sm font-medium w-full text-right">
-              <ShieldCheck size={18} />
-              <span>لوحة التحكم</span>
-            </button>
-          )}
+          <button onClick={() => { router.push('/admin'); setMobileMenuOpen(false); }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium w-full text-right ${isAdmin ? 'text-[#D4AF37] hover:bg-[#1a1a2e]' : 'text-gray-500 hover:bg-[#1a1a2e] hover:text-gray-300'}`}>
+            <ShieldCheck size={18} />
+            <span>لوحة التحكم</span>
+          </button>
         </div>
       </div>
     </motion.div>
@@ -1349,6 +1345,14 @@ function FooterSection() {
           <span>مدعوم بالذكاء الاصطناعي</span><span>|</span><span>تصميم هندسي معقد</span><span>|</span><span>Al-Ali Digital Library</span>
         </div>
         <div className="flex items-center justify-center gap-1 text-gray-600/50 text-[10px]"><Quote size={10} /><span>بسم الله الرحمن الرحيم</span></div>
+        {/* Admin Panel Link */}
+        <div className="mt-4">
+          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/admin'; }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] text-gray-600 hover:text-[#D4AF37] border border-emerald-500/10 hover:border-[#D4AF37]/20 transition-all">
+            <ShieldCheck size={10} />
+            <span>لوحة التحكم</span>
+          </button>
+        </div>
       </div>
     </footer>
   );
