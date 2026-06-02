@@ -106,62 +106,122 @@ function extractMetadata(html: string): {
 }
 
 /**
- * استخراج عدد الصفحات الكلي من pager
+ * استخراج عدد الصفحات الكلي من pager — محسّن
+ * يدعم أنماط متعددة: الصفحة_N, /N, page_N
  */
 function extractTotalPages(html: string): number {
-  const pagerRegex = /<div class="pager">([\s\S]*?)<\/div>/i;
-  const pagerMatch = pagerRegex.exec(html);
-  if (!pagerMatch) return 1;
-
-  const pagerContent = pagerMatch[1];
   let maxPage = 1;
 
-  // Match الصفحة_N patterns in href
-  const pageLinks = pagerContent.matchAll(/الصفحة_(\d+)/g);
-  for (const m of pageLinks) {
-    const num = parseInt(m[1], 10);
-    if (num > maxPage) maxPage = num;
+  // 1) من div.pager — أنماط href المتعددة
+  const pagerRegex = /<div class="pager">([\s\S]*?)<\/div>/i;
+  const pagerMatch = pagerRegex.exec(html);
+
+  if (pagerMatch) {
+    const pagerContent = pagerMatch[1];
+
+    // Pattern: href=".../الصفحة_15"
+    const pageLinksArabic = pagerContent.matchAll(/الصفحة_(\d+)/g);
+    for (const m of pageLinksArabic) {
+      const num = parseInt(m[1], 10);
+      if (num > maxPage) maxPage = num;
+    }
+
+    // Pattern: class="page">15</a> or just bare numbers in page navigation
+    const directPageLinks = pagerContent.matchAll(/class="page"[^>]*>\s*(\d+)\s*</g);
+    for (const m of directPageLinks) {
+      const num = parseInt(m[1], 10);
+      if (num > maxPage) maxPage = num;
+    }
+
+    // Pattern: href=".../الكتب/الصفحة_N"
+    const hrefPattern = pagerContent.matchAll(/href="[^"]*?\/(\d+)(?:\/|")/g);
+    for (const m of hrefPattern) {
+      const num = parseInt(m[1], 10);
+      if (num > maxPage && num < 10000) maxPage = num;
+    }
+  }
+
+  // 2) إذا لم نجد من pager، ابحث في كل الصفحة عن أنماط الترقيم
+  if (maxPage <= 1) {
+    const allPageRefs = html.matchAll(/الصفحة_(\d+)/g);
+    for (const m of allPageRefs) {
+      const num = parseInt(m[1], 10);
+      if (num > maxPage) maxPage = num;
+    }
   }
 
   return maxPage;
 }
 
 /**
- * استخراج محتوى الصفحة الفعلي من <div class="page">
- * نتجنب div.text الأول (البيانات الوصفية) ونأخذ محتوى الصفحة الحقيقي
+ * استخراج محتوى الصفحة الفعلي — محسّن
+ * يستخدم مطابقة أعمق ليتعامل مع الـ divs المتداخلة
  */
 function extractPageContent(html: string): string {
-  // Find <div class="page"> content
-  const pageDivRegex = /<div class="page">\s*(.*?)\s*<\/div>\s*(?:<div class="pager">|$)/is;
-  const pageMatch = pageDivRegex.exec(html);
+  // === الطريقة 1: ابحث عن <div class="page"> واستخرج كل محتواه ===
+  // نستخدم index-of للعثور على البداية والنهاية بدقة
+  const pageDivStart = html.indexOf('<div class="page">');
 
-  if (!pageMatch) {
-    // Fallback: find any div.text after the metadata
-    const allTextDivs = [...html.matchAll(/<div class="text">(.*?)<\/div>/gis)];
-    if (allTextDivs.length > 1) {
-      // Return the second div.text (actual content, not metadata)
-      return allTextDivs[1][1];
+  if (pageDivStart !== -1) {
+    const contentStart = pageDivStart + '<div class="page">'.length;
+
+    // ابحث عن </div> التالي لمحتوى الصفحة (قبل pager أو نهاية)
+    // نستخدم مطابقة عميقة: نبحث عن <div class="pager"> أو <div class="text"> التالية
+    const pagerStart = html.indexOf('<div class="pager">', contentStart);
+    const nextTextDiv = html.indexOf('<div class="text">', contentStart);
+
+    let contentEnd = html.length;
+
+    // إذا وُجد pager، النهاية عنده
+    if (pagerStart !== -1 && pagerStart < contentEnd) {
+      contentEnd = pagerStart;
     }
-    if (allTextDivs.length === 1) {
-      return allTextDivs[0][1];
+
+    // إذا وُجد div.text آخر بعد الـ page div، قد يكون نهاية المحتوى
+    if (nextTextDiv !== -1 && nextTextDiv < contentEnd) {
+      // لكن لا نأخذه إذا كانpager بعد الـ text
+      if (pagerStart === -1 || nextTextDiv < pagerStart) {
+        contentEnd = nextTextDiv;
+      }
     }
-    return '';
+
+    let pageContent = html.substring(contentStart, contentEnd).trim();
+
+    // أزل آخر </div> زائد إن وُجد
+    if (pageContent.endsWith('</div>')) {
+      pageContent = pageContent.slice(0, -6).trim();
+    }
+
+    // أزل div.text الأول فقط إذا كان يحتوي بيانات وصفية
+    const metadataPatterns = /الكتاب:|المؤلف:|الجزء:|المجموعة:/;
+    const firstTextDiv = pageContent.match(/<div class="text">([\s\S]*?)<\/div>/i);
+    if (firstTextDiv && metadataPatterns.test(firstTextDiv[1])) {
+      pageContent = pageContent.replace(/<div class="text">[\s\S]*?<\/div>\s*/, '');
+    }
+
+    if (pageContent.trim().length > 5) {
+      return pageContent.trim();
+    }
   }
 
-  let pageContent = pageMatch[1];
-
-  // Remove the first div.text ONLY if it contains metadata (الكتاب:, المؤلف:, etc.)
-  // NOT if it contains actual book content (as in non-Quran books)
-  const metadataPatterns = /الكتاب:|المؤلف:|الجزء:|المجموعة:/;
-  const firstTextDiv = pageContent.match(/<div class="text">([\s\S]*?)<\/div>/i);
-  if (firstTextDiv && metadataPatterns.test(firstTextDiv[1])) {
-    pageContent = pageContent.replace(/<div class="text">[\s\S]*?<\/div>\s*/, '');
+  // === الطريقة 2: البديل — ابحث عن div.text بعد البيانات الوصفية ===
+  const allTextDivs = [...html.matchAll(/<div class="text">([\s\S]*?)<\/div>/gi)];
+  if (allTextDivs.length > 1) {
+    // الثاني عادة هو المحتوى الحقيقي
+    return allTextDivs[1][1].trim();
+  }
+  if (allTextDivs.length === 1) {
+    return allTextDivs[0][1].trim();
   }
 
-  // Clean whitespace but preserve HTML formatting tags
-  pageContent = pageContent.trim();
+  // === الطريقة 3: البديل الأخير — كل ما بين div.text الأول و div.pager ===
+  const textDivStart = html.indexOf('<div class="text">');
+  const textDivEnd = html.indexOf('<div class="pager">');
+  if (textDivStart !== -1 && textDivEnd !== -1 && textDivEnd > textDivStart) {
+    return html.substring(textDivStart, textDivEnd).replace(/^<div class="text">/, '').trim();
+  }
 
-  return pageContent;
+  return '';
 }
 
 /**
@@ -205,20 +265,31 @@ function extractToc(html: string): Array<{ num: number; title: string; page: num
 }
 
 /**
- * بناء رابط صفحة كتاب محدد
+ * بناء رابط صفحة كتاب محدد — محسّن
+ * يدعم أنماط URL متعددة من مصدر shiaonlinelibrary
  */
 function buildPageUrl(bookUrl: string, pageNum: number): string {
-  // Handle archive URLs
-  // Pattern: .../الكتب/1_القرآن-الكريم.../الصفحة_1
-  // Pattern: .../الكتب/الصفحة_N
-
-  // If already has /الصفحة_, replace it
+  // Pattern 1: الرابط يحتوي /الصفحة_N بالفعل → استبدل الرقم فقط
   if (/\/الصفحة_\d+/.test(bookUrl)) {
     return bookUrl.replace(/\/الصفحة_\d+/, `/الصفحة_${pageNum}`);
   }
 
-  // Append /الصفحة_N
+  // Pattern 2: الرابط ينتهي بـ / رقم الصفحة → استبدل الرقم
+  if (/\/\d+\/?$/.test(bookUrl) && !/الصفحة/.test(bookUrl)) {
+    return bookUrl.replace(/\/\d+\/?$/, `/${pageNum}`);
+  }
+
+  // Pattern 3: الرابط هو رابط الكتاب الأساسي → أضف /الصفحة_N
   return `${bookUrl}/الصفحة_${pageNum}`;
+}
+
+/**
+ * تنظيف رابط الكتاب من الصفحات المُضمّنة
+ * يُرجع رابط الكتاب الأساسي بدون رقم صفحة
+ */
+function cleanBookUrl(bookUrl: string): string {
+  // أزل /الصفحة_N من الرابط
+  return bookUrl.replace(/\/الصفحة_\d+\/?$/, '').replace(/\/\d+\/?$/, '');
 }
 
 // === MAIN HANDLER ===
@@ -235,8 +306,11 @@ export async function POST(req: NextRequest) {
     let targetUrl = url;
 
     if (action === 'content' && page > 0) {
-      // If this is the main book URL (no /الصفحة_ yet), go to specific page
-      if (!/\/الصفحة_\d+/.test(url)) {
+      // إذا الرابط يحتوي بالفعل /الصفحة_، حدّث رقم الصفحة
+      if (/\/الصفحة_\d+/.test(url)) {
+        targetUrl = buildPageUrl(url, page);
+      } else if (!/\/الصفحة_\d+/.test(url)) {
+        // رابط كتاب أساسي → أضف رقم الصفحة
         targetUrl = buildPageUrl(url, page);
       }
     }
@@ -265,6 +339,7 @@ export async function POST(req: NextRequest) {
       const metadata = extractMetadata(html);
       const totalPages = extractTotalPages(html);
       const toc = extractToc(html);
+      const baseUrl = cleanBookUrl(targetUrl);
 
       return NextResponse.json({
         success: true,
@@ -272,6 +347,7 @@ export async function POST(req: NextRequest) {
         metadata,
         totalPages,
         toc,
+        baseUrl,
         url: targetUrl,
       });
     }
