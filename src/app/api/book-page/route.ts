@@ -154,71 +154,74 @@ function extractTotalPages(html: string): number {
 }
 
 /**
- * استخراج محتوى الصفحة الفعلي — محسّن
- * يستخدم مطابقة أعمق ليتعامل مع الـ divs المتداخلة
+ * استخراج محتوى الصفحة الفعلي
+ * البنية الفعلية من المصدر:
+ *   <div class="page">
+ *     <div class="text"> أو <div class="quran"> ← المحتوى هنا
+ *     <div class="pagenumber">
+ *   </div>
+ *   <div class="pager"> ← ترقيم الصفحات (خارج page div)
  */
 function extractPageContent(html: string): string {
-  // === الطريقة 1: ابحث عن <div class="page"> واستخرج كل محتواه ===
-  // نستخدم index-of للعثور على البداية والنهاية بدقة
+  // === الطريقة 1: استخراج كل ما بين <div class="page"> و <div class="pager"> ===
   const pageDivStart = html.indexOf('<div class="page">');
 
   if (pageDivStart !== -1) {
     const contentStart = pageDivStart + '<div class="page">'.length;
 
-    // ابحث عن </div> التالي لمحتوى الصفحة (قبل pager أو نهاية)
-    // نستخدم مطابقة عميقة: نبحث عن <div class="pager"> أو <div class="text"> التالية
+    // النهاية: <div class="pager"> هو الأخ دائماً لـ <div class="page">
     const pagerStart = html.indexOf('<div class="pager">', contentStart);
-    const nextTextDiv = html.indexOf('<div class="text">', contentStart);
 
     let contentEnd = html.length;
-
-    // إذا وُجد pager، النهاية عنده
-    if (pagerStart !== -1 && pagerStart < contentEnd) {
+    if (pagerStart !== -1) {
       contentEnd = pagerStart;
     }
 
-    // إذا وُجد div.text آخر بعد الـ page div، قد يكون نهاية المحتوى
-    if (nextTextDiv !== -1 && nextTextDiv < contentEnd) {
-      // لكن لا نأخذه إذا كانpager بعد الـ text
-      if (pagerStart === -1 || nextTextDiv < pagerStart) {
-        contentEnd = nextTextDiv;
-      }
-    }
-
+    // كل ما بين <div class="page"> و <div class="pager"> هو المحتوى
     let pageContent = html.substring(contentStart, contentEnd).trim();
 
-    // أزل آخر </div> زائد إن وُجد
+    // أزل آخر </div> زائد إن وُجد (إغلاق div.page نفسه)
     if (pageContent.endsWith('</div>')) {
       pageContent = pageContent.slice(0, -6).trim();
     }
 
-    // أزل div.text الأول فقط إذا كان يحتوي بيانات وصفية
-    const metadataPatterns = /الكتاب:|المؤلف:|الجزء:|المجموعة:/;
+    // أزل div.text الأول فقط إذا كان يحتوي بيانات وصفية (الكتاب/المؤلف/الجزء)
+    // وليس محتوى كتاب حقيقي
+    const metadataPatterns = /الكتاب:\s*<?[^>]*>|المؤلف:\s*<?[^>]*>|الجزء:\s*<?[^>]*>|المجموعة:\s*<?[^>]*>/;
     const firstTextDiv = pageContent.match(/<div class="text">([\s\S]*?)<\/div>/i);
     if (firstTextDiv && metadataPatterns.test(firstTextDiv[1])) {
       pageContent = pageContent.replace(/<div class="text">[\s\S]*?<\/div>\s*/, '');
     }
+
+    // أزل <a name="top"></a> إن وُجد
+    pageContent = pageContent.replace(/<a name="top"><\/a>\s*/gi, '');
 
     if (pageContent.trim().length > 5) {
       return pageContent.trim();
     }
   }
 
-  // === الطريقة 2: البديل — ابحث عن div.text بعد البيانات الوصفية ===
-  const allTextDivs = [...html.matchAll(/<div class="text">([\s\S]*?)<\/div>/gi)];
-  if (allTextDivs.length > 1) {
-    // الثاني عادة هو المحتوى الحقيقي
-    return allTextDivs[1][1].trim();
-  }
-  if (allTextDivs.length === 1) {
-    return allTextDivs[0][1].trim();
+  // === الطريقة 2: البديل — ابحث عن div.text أو div.quran بعد البيانات الوصفية ===
+  // بعض الصفحات قد لا تحتوي div.page واضح
+  const textDivs = [...html.matchAll(/<div class="(text|quran)">([\s\S]*?)<\/div>\s*<\/div>/gi)];
+  for (const match of textDivs) {
+    const content = match[2].trim();
+    if (content.length > 20 && !/الكتاب:|المؤلف:|الجزء:|المجموعة:/.test(content)) {
+      return content;
+    }
   }
 
-  // === الطريقة 3: البديل الأخير — كل ما بين div.text الأول و div.pager ===
-  const textDivStart = html.indexOf('<div class="text">');
-  const textDivEnd = html.indexOf('<div class="pager">');
-  if (textDivStart !== -1 && textDivEnd !== -1 && textDivEnd > textDivStart) {
-    return html.substring(textDivStart, textDivEnd).replace(/^<div class="text">/, '').trim();
+  // === الطريقة 3: كل div.text بعد البيانات الوصفية ===
+  const allTextDivs = [...html.matchAll(/<div class="text">([\s\S]*?)<\/div>/gi)];
+  for (const match of allTextDivs) {
+    const content = match[1].trim();
+    if (content.length > 20 && !/الكتاب:|المؤلف:|الجزء:|المجموعة:/.test(content)) {
+      return content;
+    }
+  }
+  // إذا لم نجد محتوى حقيقي، أرجع أول div.text
+  if (allTextDivs.length >= 1) {
+    return allTextDivs[0][1].trim();
   }
 
   return '';
