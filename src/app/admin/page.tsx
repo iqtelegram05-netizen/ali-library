@@ -154,7 +154,7 @@ export default function AdminPage() {
 
   const deleteBook = async (id: string) => {
     try {
-      const res = await fetch(`/api/books/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/books/${id}`, { method: 'DELETE', headers: getAdminHeaders() });
       const data = await res.json();
       if (data.success) {
         setBooks(prev => prev.filter(b => b.id !== id));
@@ -194,10 +194,20 @@ export default function AdminPage() {
   const saveEditBook = async (id: string) => {
     if (!editBookName.trim()) return;
     try {
-      showToast('تم تحديث الكتاب بنجاح', 'success');
-      cancelEditBook();
-      await loadData();
-    } catch (e) { console.error(e); }
+      const res = await fetch(`/api/books/${id}`, {
+        method: 'PUT',
+        headers: getAdminHeaders(),
+        body: JSON.stringify({ name: editBookName.trim(), category: editBookCategory }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('تم تحديث الكتاب بنجاح', 'success');
+        cancelEditBook();
+        await loadData();
+      } else {
+        showToast(data.error || 'فشل في تحديث الكتاب', 'error');
+      }
+    } catch (e) { console.error(e); showToast('فشل الاتصال بالخادم', 'error'); }
   };
 
   // ===== FETCH ENGINE HANDLERS =====
@@ -208,7 +218,7 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/books', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ name: bookName.trim(), url: bookUrl.trim() || '', category: 'other' }),
       });
       const data = await res.json();
@@ -266,7 +276,7 @@ export default function AdminPage() {
       if (!url || (!/\d+_/.test(url) && !url.includes('shiaonlinelibrary'))) continue;
       try {
         const res = await fetch('/api/books', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: getAdminHeaders(),
           body: JSON.stringify({ name: pdf.author ? `${displayName} — ${pdf.author}` : displayName, url, category: pdf.category || 'other' }),
         });
         const data = await res.json();
