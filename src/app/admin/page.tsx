@@ -71,6 +71,7 @@ export default function AdminPage() {
   const [editBookName, setEditBookName] = useState('');
   const [editBookCategory, setEditBookCategory] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string; error?: string } | null>(null);
 
   // Fetch engine state
   const [bookName, setBookName] = useState('');
@@ -109,6 +110,12 @@ export default function AdminPage() {
     } catch (e) {
       console.error(e);
     }
+    // Check database connection
+    try {
+      const res = await fetch('/api/admin/db-check');
+      const data = await res.json();
+      setDbStatus({ connected: data.connected, message: data.message, error: data.error });
+    } catch { setDbStatus({ connected: false, message: 'فشل فحص قاعدة البيانات' }); }
     setLoading(false);
   };
 
@@ -269,26 +276,34 @@ export default function AdminPage() {
   const addSelectedBooks = async () => {
     const selected = scrapedPdfs.filter(p => p.selected);
     if (selected.length === 0) return;
-    setFetchLoading(true); let addedCount = 0;
+    setFetchLoading(true); let addedCount = 0; let lastError = '';
     for (const pdf of selected) {
       const displayName = pdf.title || pdf.name || 'كتاب بدون عنوان';
       const url = pdf.url || '';
-      if (!url || (!/\d+_/.test(url) && !url.includes('shiaonlinelibrary'))) continue;
+      if (!url) { lastError = `الكتاب "${displayName}" لا يحتوي على رابط`; continue; }
       try {
         const res = await fetch('/api/books', {
           method: 'POST', headers: getAdminHeaders(),
           body: JSON.stringify({ name: pdf.author ? `${displayName} — ${pdf.author}` : displayName, url, category: pdf.category || 'other' }),
         });
         const data = await res.json();
-        if (data.success) addedCount++;
-      } catch { /* skip */ }
+        if (data.success) {
+          addedCount++;
+        } else {
+          lastError = data.error || `فشل إضافة: ${displayName}`;
+        }
+      } catch (e: any) {
+        lastError = e.message || 'فشل الاتصال بالخادم';
+      }
     }
-    setScrapedPdfs([]); setShowScrapeResults(false); setScrapeError('');
+    setScrapedPdfs([]); setShowScrapeResults(false);
     setFetchLoading(false);
     if (addedCount > 0) {
       showToast(`تم إضافة ${addedCount} كتاب بنجاح`, 'success');
       await loadData();
-    } else { setScrapeError('لم يتم إضافة أي كتاب جديد'); }
+    } else {
+      setScrapeError(lastError || 'لم يتم إضافة أي كتاب جديد');
+    }
   };
 
   // ===== AUTH CHECKING STATE =====
@@ -484,6 +499,34 @@ export default function AdminPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {/* Database Status Banner */}
+        {dbStatus && !dbStatus.connected && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-400 font-bold text-sm">قاعدة البيانات غير متصلة!</p>
+                <p className="text-red-300/70 text-xs mt-1">{dbStatus.error || dbStatus.message}</p>
+                <p className="text-gray-500 text-[11px] mt-2">الخطوات لإصلاح المشكلة:</p>
+                <ol className="text-gray-400 text-[11px] mt-1 space-y-1 list-decimal list-inside">
+                  <li>افتح مشروعك على <span dir="ltr" className="text-gray-300">vercel.com</span></li>
+                  <li>اذهب إلى <span className="text-gray-300">Settings → Environment Variables</span></li>
+                  <li>أضف المتغير <span dir="ltr" className="text-red-300 font-mono">POSTGRES_URL</span> بقيمة رابط قاعدة البيانات</li>
+                  <li>أعد نشر الموقع <span className="text-gray-300">(Redeploy)</span></li>
+                </ol>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        {dbStatus && dbStatus.connected && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="mb-4 px-4 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-emerald-400 text-xs">{dbStatus.message}</span>
+          </motion.div>
+        )}
+
         {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
