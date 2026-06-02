@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, Users, Shield, Trash2, Crown,
   Loader2, ArrowRight, LogOut, AlertTriangle,
   CheckCircle2, Settings, UserPlus, Pencil, X,
   Eye, Database, Activity, TrendingUp, Search,
   Save, BarChart3, Globe, UserCog, Key, Lock,
+  Zap, Sparkles, BookMarked, FileText, Bug,
 } from 'lucide-react';
 
 interface BookData {
@@ -63,13 +64,24 @@ export default function AdminPage() {
   const [books, setBooks] = useState<BookData[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'books' | 'users' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'fetch' | 'books' | 'users' | 'settings'>('dashboard');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [editBookId, setEditBookId] = useState<string | null>(null);
   const [editBookName, setEditBookName] = useState('');
   const [editBookCategory, setEditBookCategory] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Fetch engine state
+  const [bookName, setBookName] = useState('');
+  const [bookUrl, setBookUrl] = useState('');
+  const [fetchError, setFetchError] = useState('');
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [scrapeUrl, setScrapeUrl] = useState('https://web.archive.org/web/20250105004220/http://shiaonlinelibrary.com/الكتب');
+  const [scraping, setScraping] = useState(false);
+  const [scrapedPdfs, setScrapedPdfs] = useState<{ id?: string; title?: string; name?: string; author?: string; pages?: string; url: string; selected: boolean; category?: string }[]>([]);
+  const [scrapeError, setScrapeError] = useState('');
+  const [showScrapeResults, setShowScrapeResults] = useState(false);
 
   // Check if already authenticated on mount
   useEffect(() => {
@@ -186,6 +198,87 @@ export default function AdminPage() {
       cancelEditBook();
       await loadData();
     } catch (e) { console.error(e); }
+  };
+
+  // ===== FETCH ENGINE HANDLERS =====
+  const handleManualAdd = async () => {
+    setFetchError('');
+    if (!bookName.trim()) { setFetchError('يجب إدخال اسم الكتاب'); return; }
+    setFetchLoading(true);
+    try {
+      const res = await fetch('/api/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: bookName.trim(), url: bookUrl.trim() || '', category: 'other' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('تم إضافة الكتاب بنجاح', 'success');
+        setBookName(''); setBookUrl('');
+        await loadData();
+      } else { setFetchError(data.error || 'فشل في إضافة الكتاب'); }
+    } catch { setFetchError('فشل الاتصال بالخادم'); }
+    setFetchLoading(false);
+  };
+
+  const handleSmartScrape = async () => {
+    setScrapeError('');
+    if (!scrapeUrl.trim()) { setScrapeError('يجب إدخال رابط الموقع'); return; }
+    try { new URL(scrapeUrl); } catch { setScrapeError('الرابط غير صالح'); return; }
+    setScraping(true); setScrapedPdfs([]); setShowScrapeResults(false);
+    try {
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: scrapeUrl }),
+      });
+      const data = await res.json();
+      if (data.success && data.books && data.books.length > 0) {
+        const mapped = data.books.map((b: any) => ({
+          id: b.id, title: b.title || b.name, name: b.title || b.name, author: b.author || '',
+          pages: b.part || '', url: b.url, selected: true, category: 'other', source: b.source || 'shia-library',
+        }));
+        setScrapedPdfs([]); setShowScrapeResults(true);
+        setScrapeError(`المحرك الذكي يستخرج ${mapped.length} كتاب...`);
+        for (let i = 0; i < mapped.length; i++) {
+          await new Promise(r => setTimeout(r, 50));
+          setScrapedPdfs(prev => [...prev, mapped[i]]);
+        }
+        setScrapeError(`تم استخراج ${mapped.length} كتاب بنجاح`);
+      } else {
+        setScrapeError(data.message || data.error || 'لم يتم العثور على كتب');
+      }
+    } catch { setScrapeError('فشل الاتصال بالخادم'); }
+    setScraping(false);
+  };
+
+  const toggleScrapeSelect = (index: number) => {
+    setScrapedPdfs(prev => prev.map((p, i) => i === index ? { ...p, selected: !p.selected } : p));
+  };
+
+  const addSelectedBooks = async () => {
+    const selected = scrapedPdfs.filter(p => p.selected);
+    if (selected.length === 0) return;
+    setFetchLoading(true); let addedCount = 0;
+    for (const pdf of selected) {
+      const displayName = pdf.title || pdf.name || 'كتاب بدون عنوان';
+      const url = pdf.url || '';
+      if (!url || (!/\d+_/.test(url) && !url.includes('shiaonlinelibrary'))) continue;
+      try {
+        const res = await fetch('/api/books', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: pdf.author ? `${displayName} — ${pdf.author}` : displayName, url, category: pdf.category || 'other' }),
+        });
+        const data = await res.json();
+        if (data.success) addedCount++;
+      } catch { /* skip */ }
+    }
+    setScrapedPdfs([]); setShowScrapeResults(false); setScrapeError('');
+    setFetchLoading(false);
+    if (addedCount > 0) {
+      showToast(`تم إضافة ${addedCount} كتاب بنجاح`, 'success');
+      await loadData();
+    } else { setScrapeError('لم يتم إضافة أي كتاب جديد'); }
   };
 
   // ===== AUTH CHECKING STATE =====
@@ -410,6 +503,7 @@ export default function AdminPage() {
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
             { id: 'dashboard' as const, label: 'لوحة المعلومات', icon: BarChart3 },
+            { id: 'fetch' as const, label: 'جلب الكتب', icon: Zap },
             { id: 'books' as const, label: 'إدارة الكتب', icon: BookOpen },
             { id: 'users' as const, label: 'إدارة المستخدمين', icon: Users },
             { id: 'settings' as const, label: 'الإعدادات', icon: Settings },
@@ -497,20 +591,137 @@ export default function AdminPage() {
                 <TrendingUp size={18} className="text-[#D4AF37]" />
                 إجراءات سريعة
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onClick={() => setActiveTab('fetch')}
+                  className="flex items-center gap-2 p-3 bg-[#111827] rounded-xl hover:bg-[#D4AF37]/10 border border-[#D4AF37]/10 hover:border-[#D4AF37]/20 transition-all text-sm text-gray-300">
+                  <Zap size={16} className="text-[#D4AF37]" /> جلب كتب
+                </button>
                 <button onClick={() => setActiveTab('books')}
                   className="flex items-center gap-2 p-3 bg-[#111827] rounded-xl hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20 transition-all text-sm text-gray-300">
-                  <BookOpen size={16} className="text-emerald-400" /> إضافة كتاب
+                  <BookOpen size={16} className="text-emerald-400" /> إدارة الكتب
                 </button>
                 <button onClick={() => setActiveTab('users')}
                   className="flex items-center gap-2 p-3 bg-[#111827] rounded-xl hover:bg-purple-500/10 border border-purple-500/10 hover:border-purple-500/20 transition-all text-sm text-gray-300">
                   <UserCog size={16} className="text-purple-400" /> إدارة المشرفين
                 </button>
                 <button onClick={() => setActiveTab('settings')}
-                  className="flex items-center gap-2 p-3 bg-[#111827] rounded-xl hover:bg-[#D4AF37]/10 border border-[#D4AF37]/10 hover:border-[#D4AF37]/20 transition-all text-sm text-gray-300">
-                  <Settings size={16} className="text-[#D4AF37]" /> إعدادات الموقع
+                  className="flex items-center gap-2 p-3 bg-[#111827] rounded-xl hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20 transition-all text-sm text-gray-300">
+                  <Settings size={16} className="text-emerald-400" /> الإعدادات
                 </button>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ===== FETCH TAB ===== */}
+        {activeTab === 'fetch' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+            {/* Manual Add */}
+            <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl">
+              <h2 className="text-gray-100 font-bold mb-4 flex items-center gap-2">
+                <BookMarked size={18} className="text-emerald-400" />
+                إحضار كتاب يدوي
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-gray-500 text-xs mb-2 font-medium">اسم الكتاب</label>
+                  <input type="text" value={bookName} onChange={e => setBookName(e.target.value)} placeholder="مثال: نهج البلاغة - الإمام علي" className="w-full px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm focus:border-emerald-500/40 focus:outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="block text-gray-500 text-xs mb-2 font-medium">رابط الكتاب (PDF) — اختياري</label>
+                  <input type="text" value={bookUrl} onChange={e => setBookUrl(e.target.value)} placeholder="https://example.com/book.pdf" className="w-full px-4 py-3 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm focus:border-emerald-500/40 focus:outline-none transition-all" dir="ltr" />
+                </div>
+              </div>
+              <AnimatePresence>
+                {fetchError && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-4">
+                    <AlertTriangle size={16} className="text-red-400 shrink-0" /><span className="text-red-400 text-sm">{fetchError}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <button onClick={handleManualAdd} disabled={fetchLoading} className="px-6 py-3 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-white font-medium text-sm flex items-center gap-2 disabled:opacity-50 transition-all hover:shadow-lg hover:shadow-emerald-500/20">
+                {fetchLoading ? <Loader2 size={16} className="animate-spin" /> : <BookMarked size={16} />}
+                <span>{fetchLoading ? 'جارٍ الإحضار...' : 'إحضار الكتاب'}</span>
+              </button>
+            </div>
+
+            {/* Smart Scrape Engine */}
+            <div className="bg-[#0d1117]/80 border border-[#D4AF37]/15 rounded-2xl p-6 backdrop-blur-xl">
+              <h2 className="text-gray-100 font-bold mb-1 flex items-center gap-2">
+                <Bug size={18} className="text-[#D4AF37]" />
+                محرك الاستخراج الشامل
+              </h2>
+              <p className="text-gray-500 text-xs mb-4">محرك ذكي محلي يحلل الروابط ويستخرج الكتب تلقائياً من المكتبات الإلكترونية</p>
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <div className="flex-1">
+                  <input type="text" value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://example.com/library" className="w-full px-4 py-3 rounded-xl bg-[#111827] border border-[#D4AF37]/20 text-gray-100 text-sm focus:border-[#D4AF37]/40 focus:outline-none transition-all" dir="ltr" />
+                </div>
+                <button onClick={handleSmartScrape} disabled={scraping} className="px-6 py-3 rounded-xl bg-gradient-to-l from-[#D4AF37] to-[#b8941e] text-[#0a0a0f] font-bold text-sm flex items-center gap-2 disabled:opacity-50 transition-all shrink-0 hover:shadow-lg hover:shadow-[#D4AF37]/20">
+                  {scraping ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  <span>{scraping ? 'جارٍ التحليل...' : 'استخراج الكتب'}</span>
+                </button>
+              </div>
+              <AnimatePresence>
+                {scrapeError && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex items-center gap-2 px-4 py-3 rounded-xl border mb-4 ${scrapeError.includes('تم') && !scrapeError.includes('لم') ? 'bg-emerald-500/5 border-emerald-500/15' : 'bg-red-500/10 border-red-500/20'}`}>
+                    {scrapeError.includes('تم') && !scrapeError.includes('لم')
+                      ? <><CheckCircle2 size={16} className="text-emerald-400 shrink-0" /><span className="text-emerald-300 text-sm">{scrapeError}</span></>
+                      : <><AlertTriangle size={16} className="text-red-400 shrink-0" /><span className="text-red-400 text-sm">{scrapeError}</span></>
+                    }
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {/* Loading spinner */}
+              {scraping && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-8 flex flex-col items-center gap-3">
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-full border-2 border-[#D4AF37]/30 border-t-[#D4AF37] animate-spin" />
+                    <Sparkles size={20} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#D4AF37]" />
+                  </div>
+                  <span className="text-gray-300 text-sm font-medium">المحرك الذكي يحلل الصفحة...</span>
+                  <span className="text-gray-500 text-xs">جارٍ فحص الروابط واستخراج الكتب</span>
+                </motion.div>
+              )}
+              {/* Scrape Results */}
+              <AnimatePresence>
+                {showScrapeResults && scrapedPdfs.length > 0 && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                        <Sparkles size={14} className="text-[#D4AF37]" />
+                        تم استخراج {scrapedPdfs.length} كتاب
+                      </span>
+                      <button onClick={addSelectedBooks} disabled={fetchLoading} className="px-4 py-2 rounded-lg bg-gradient-to-l from-emerald-600 to-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 disabled:opacity-50 hover:shadow-lg hover:shadow-emerald-500/20 transition-all">
+                        {fetchLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                        <span>إضافة المحدد ({scrapedPdfs.filter(p => p.selected).length})</span>
+                      </button>
+                    </div>
+                    <div className="max-h-[500px] overflow-y-auto space-y-2 pl-2" style={{ scrollbarWidth: 'thin' }}>
+                      {scrapedPdfs.map((pdf, index) => (
+                        <motion.div key={pdf.id || index} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.02 }}
+                          className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${pdf.selected ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-[#111827] border-emerald-500/10 opacity-60'}`}>
+                          <input type="checkbox" checked={pdf.selected} onChange={() => toggleScrapeSelect(index)} className="w-4 h-4 rounded accent-emerald-500 shrink-0 mt-1 cursor-pointer" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-gray-100 text-sm font-bold leading-relaxed">{pdf.title || pdf.name}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              {pdf.author && (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-[#D4AF37]/80">
+                                  <BookMarked size={10} /> {pdf.author}
+                                </span>
+                              )}
+                              {pdf.pages && (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                                  <FileText size={10} /> {pdf.pages} صفحة
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
