@@ -5,10 +5,29 @@ import bcrypt from 'bcryptjs';
 
 /* ===================================================================
    Auth.js v5 — Custom Credentials Provider (Phone + Password).
-   Replaced Google OAuth with phone-based authentication.
-   Registration requires: phone, password, full name, address,
-   country, ID photo, and face photo.
+   Safe schema detection to handle missing columns in DB.
    =================================================================== */
+
+let _schemaChecked = false;
+let _safeSelect: Record<string, boolean> = {
+  id: true, phone: true, name: true, password: true, role: true, isVerified: true, image: true,
+};
+
+async function detectAuthSchema() {
+  if (_schemaChecked) return;
+  _schemaChecked = true;
+  const optionalFields = ['fullName', 'displayName'];
+  for (const field of optionalFields) {
+    try {
+      await prisma.user.findFirst({ select: { [field]: true } as any });
+      _safeSelect[field] = true;
+    } catch {
+      _safeSelect[field] = false;
+      console.log(`[AUTH] Schema: ${field} column does NOT exist`);
+    }
+  }
+  console.log('[AUTH] Safe select fields:', _safeSelect);
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -26,20 +45,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const phone = (credentials.phone as string).trim();
         const password = credentials.password as string;
 
-        const user = await prisma.user.findUnique({
-          where: { phone },
-          select: {
-            id: true,
-            phone: true,
-            name: true,
-            fullName: true,
-            displayName: true,
-            image: true,
-            password: true,
-            role: true,
-            isVerified: true,
-          },
-        });
+        await detectAuthSchema();
+
+        let user: any = null;
+        try {
+          user = await prisma.user.findUnique({
+            where: { phone },
+            select: _safeSelect as any,
+          });
+        } catch (err: any) {
+          console.error('[AUTH] authorize findUnique error:', err?.message);
+          // Fallback: try with minimal fields
+          try {
+            user = await prisma.user.findUnique({
+              where: { phone },
+              select: { id: true, phone: true, name: true, password: true, role: true, isVerified: true },
+            });
+          } catch (retryErr: any) {
+            console.error('[AUTH] authorize minimal findUnique also failed:', retryErr?.message);
+            return null;
+          }
+        }
 
         if (!user || !user.password) {
           return null;
@@ -64,12 +90,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        // On sign-in, populate token from user object
         token.id = user.id;
         token.phone = user.phone;
         token.name = user.name;
@@ -78,25 +103,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.isVerified = (user as any).isVerified || false;
       }
 
-      // Refresh user data from DB on every JWT callback
+      // Refresh user data from DB
       try {
         const phone = token?.phone as string;
         if (phone) {
-          const dbUser = await prisma.user.findUnique({
-            where: { phone },
-            select: { id: true, role: true, displayName: true, name: true, fullName: true, isVerified: true, image: true },
-          });
+          await detectAuthSchema();
+          let dbUser: any = null;
+          try {
+            dbUser = await prisma.user.findUnique({
+              where: { phone },
+              select: _safeSelect as any,
+            });
+          } catch {
+            // fallback
+          }
           if (dbUser) {
             token.role = dbUser.role;
             token.id = dbUser.id;
-            token.displayName = dbUser.displayName;
+            token.displayName = dbUser.displayName || null;
             token.name = dbUser.fullName || dbUser.name;
             token.isVerified = dbUser.isVerified;
             token.picture = dbUser.image;
           }
         }
       } catch (error: any) {
-        console.error('[AUTH] jwt error:', error?.message || error);
+        console.error('[AUTH] jwt refresh error:', error?.message);
       }
 
       if (trigger === 'update' && session) {

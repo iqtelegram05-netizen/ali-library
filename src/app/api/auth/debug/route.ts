@@ -1,72 +1,69 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { decode } from 'next-auth/jwt';
+import { prisma } from '@/lib/db';
 
-/**
- * Debug endpoint to check authentication state.
- * Helps diagnose why login might not be working.
- * Accessible at /api/auth/debug
- */
-export async function GET() {
+/* ===================================================================
+   Database Debug API — Checks schema health and returns diagnostics.
+   =================================================================== */
+
+export async function GET(req: Request) {
   try {
-    const env = {
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'NOT SET',
-      VERCEL_URL: process.env.VERCEL_URL || 'NOT SET',
-      NODE_ENV: process.env.NODE_ENV || 'unknown',
-      hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
-      hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-      hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
+    const diagnostics: Record<string, any> = {
+      timestamp: new Date().toISOString(),
+      databaseUrl: process.env.POSTGRES_URL ? 'SET' : 'NOT SET',
+      databaseUrlPrefix: process.env.POSTGRES_URL?.substring(0, 30) + '...',
     };
 
-    const cookieStore = await cookies();
-    const sessionToken =
-      cookieStore.get('next-auth.session-token')?.value ||
-      cookieStore.get('__Secure-next-auth.session-token')?.value;
+    // Test basic connection
+    try {
+      const userCount = await prisma.user.count();
+      diagnostics.userCount = userCount;
+      diagnostics.connection = 'OK';
+    } catch (connErr: any) {
+      diagnostics.connection = 'FAILED';
+      diagnostics.connectionError = String(connErr?.message || connErr);
+      return NextResponse.json({ diagnostics, error: 'Database connection failed' }, { status: 503 });
+    }
 
-    let decodedToken: any = null;
-    if (sessionToken) {
+    // Check User table columns by trying to select each one
+    const columns = ['id', 'email', 'phone', 'name', 'fullName', 'displayName', 'image', 'password', 'address', 'country', 'idPhoto', 'facePhoto', 'role', 'isVerified', 'createdAt', 'updatedAt'];
+    diagnostics.columns = {};
+
+    for (const col of columns) {
       try {
-        const salt = cookieStore.get('__Secure-next-auth.session-token')?.value
-          ? '__Secure-next-auth.session-token'
-          : 'next-auth.session-token';
-        decodedToken = await decode({
-          token: sessionToken,
-          secret: process.env.NEXTAUTH_SECRET || '',
-          salt,
+        await prisma.user.findFirst({
+          select: { [col]: true } as any,
         });
-      } catch (e: any) {
-        decodedToken = { error: 'Failed to decode: ' + e.message };
+        diagnostics.columns[col] = 'EXISTS';
+      } catch {
+        diagnostics.columns[col] = 'MISSING';
       }
     }
 
-    // List all auth-related cookies
-    const allCookies: Record<string, string> = {};
-    const allCookieNames = cookieStore.getAll().map(c => c.name);
-    for (const name of allCookieNames) {
-      if (name.includes('next-auth') || name.includes('csrf')) {
-        allCookies[name] = cookieStore.get(name)?.value ? 'SET (value hidden)' : 'EMPTY';
-      }
+    // Check Book table
+    try {
+      const bookCount = await prisma.book.count();
+      diagnostics.bookCount = bookCount;
+      diagnostics.bookTable = 'EXISTS';
+    } catch (bookErr: any) {
+      diagnostics.bookTable = 'MISSING';
+      diagnostics.bookError = String(bookErr?.message);
     }
 
-    return NextResponse.json({
-      timestamp: new Date().toISOString(),
-      environment: env,
-      cookies: allCookies,
-      hasSessionToken: !!sessionToken,
-      decodedToken: decodedToken ? {
-        email: decodedToken.email || null,
-        name: decodedToken.name || null,
-        role: decodedToken.role || null,
-        id: decodedToken.id || null,
-        exp: decodedToken.exp ? new Date(decodedToken.exp * 1000).toISOString() : null,
-        iat: decodedToken.iat ? new Date(decodedToken.iat * 1000).toISOString() : null,
-        error: decodedToken.error || null,
-      } : null,
-    });
+    // List existing users (without passwords)
+    try {
+      const users = await prisma.user.findMany({
+        select: { id: true, phone: true, name: true, role: true, isVerified: true, createdAt: true },
+        take: 10,
+      });
+      diagnostics.existingUsers = users;
+    } catch (listErr: any) {
+      diagnostics.existingUsers = 'ERROR: ' + String(listErr?.message);
+    }
+
+    return NextResponse.json({ diagnostics });
   } catch (error: any) {
     return NextResponse.json({
-      error: error.message || 'Unknown error',
-      stack: error.stack,
+      error: String(error?.message || error),
     }, { status: 500 });
   }
 }
