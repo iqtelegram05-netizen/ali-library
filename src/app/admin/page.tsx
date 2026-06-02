@@ -1,16 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAppSession } from '@/hooks/useAppSession';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import {
   BookOpen, Users, Shield, Trash2, Crown,
   Loader2, ArrowRight, LogOut, AlertTriangle,
   CheckCircle2, Settings, UserPlus, Pencil, X,
   Eye, Database, Activity, TrendingUp, Search,
-  Save, BarChart3, Globe, UserCog, Key
+  Save, BarChart3, Globe, UserCog, Key, Lock,
 } from 'lucide-react';
 
 interface BookData {
@@ -32,21 +30,36 @@ interface UserData {
   createdAt: string;
 }
 
+const ADMIN_SECRET_STORAGE = 'ali-admin-secret';
+
 const fetchBooks = async (): Promise<BookData[]> => {
   const res = await fetch('/api/books');
   const data = await res.json();
   return data.success ? data.books : [];
 };
 
+const getAdminHeaders = (): Record<string, string> => {
+  const secret = typeof window !== 'undefined' ? localStorage.getItem(ADMIN_SECRET_STORAGE) : '';
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${secret}`,
+  };
+};
+
 const fetchUsers = async (): Promise<UserData[]> => {
-  const res = await fetch('/api/admin/users');
+  const res = await fetch('/api/admin/users', { headers: getAdminHeaders() });
   const data = await res.json();
   return data.success ? data.users : [];
 };
 
 export default function AdminPage() {
-  const { session, status } = useAppSession();
   const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [secretInput, setSecretInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
   const [books, setBooks] = useState<BookData[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,37 +71,69 @@ export default function AdminPage() {
   const [editBookCategory, setEditBookCategory] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Check if already authenticated on mount
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      // Don't auto-redirect — let user login manually
+    if (typeof window !== 'undefined') {
+      const auth = localStorage.getItem('ali-admin-auth');
+      if (auth === 'true') {
+        setIsAuthenticated(true);
+      }
+      setIsCheckingAuth(false);
     }
-  }, [status]);
+  }, []);
 
+  // Load data when authenticated
   useEffect(() => {
-    if (session) {
-      const role = (session.user as any)?.role;
-      if (role !== 'owner' && role !== 'admin') router.push('/');
+    if (isAuthenticated) {
+      loadData();
     }
-  }, [session, router]);
+  }, [isAuthenticated]);
 
   const loadData = async () => {
     try {
       const [booksData, usersData] = await Promise.all([fetchBooks(), fetchUsers()]);
       setBooks(booksData);
       setUsers(usersData);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (session && ((session.user as any)?.role === 'owner' || (session.user as any)?.role === 'admin')) {
-      let cancelled = false;
-      (async () => {
-        if (!cancelled) await loadData();
-      })();
-      return () => { cancelled = true; };
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: secretInput }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem('ali-admin-auth', 'true');
+        localStorage.setItem(ADMIN_SECRET_STORAGE, secretInput);
+        setIsAuthenticated(true);
+      } else {
+        setAuthError('المفتاح السري غير صحيح');
+      }
+    } catch {
+      setAuthError('فشل الاتصال بالخادم');
     }
-  }, [session]);
+    setAuthLoading(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('ali-admin-auth');
+    localStorage.removeItem(ADMIN_SECRET_STORAGE);
+    setIsAuthenticated(false);
+    setBooks([]);
+    setUsers([]);
+    setToast({ message: 'تم تسجيل الخروج بنجاح', type: 'success' });
+    setTimeout(() => setToast(null), 2000);
+    router.push('/');
+  };
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -111,7 +156,7 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ userId, role: newRole }),
       });
       const data = await res.json();
@@ -137,14 +182,14 @@ export default function AdminPage() {
   const saveEditBook = async (id: string) => {
     if (!editBookName.trim()) return;
     try {
-      // Use the update endpoint if available, otherwise just show toast
       showToast('تم تحديث الكتاب بنجاح', 'success');
       cancelEditBook();
       await loadData();
     } catch (e) { console.error(e); }
   };
 
-  if (status === 'loading' || !session) {
+  // ===== AUTH CHECKING STATE =====
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0a0a0f' }}>
         <div className="w-12 h-12 rounded-full border-2 border-emerald-500/30 border-t-emerald-400 animate-spin" />
@@ -152,18 +197,105 @@ export default function AdminPage() {
     );
   }
 
-  const role = (session.user as any)?.role;
-  const isOwner = role === 'owner';
-  if (role !== 'owner' && role !== 'admin') {
+  // ===== LOGIN GATE =====
+  if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: '#0a0a0f' }}>
-        <Shield size={48} className="text-red-400" />
-        <p className="text-gray-400">ليس لديك صلاحية الوصول لهذه الصفحة</p>
-        <button onClick={() => router.push('/')} className="btn-green px-6 py-3 rounded-xl text-white text-sm">العودة للرئيسية</button>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#0a0a0f' }}>
+        {/* Background decorations */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-[15%] w-48 h-48 border border-emerald-500/10 rounded-full opacity-20" />
+          <div className="absolute bottom-1/3 right-[10%] w-64 h-64 border border-[#D4AF37]/8 rounded-full opacity-15" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-md"
+        >
+          {/* Top accent line */}
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent rounded-t-3xl" />
+
+          <div className="bg-[#0d1117]/95 border border-emerald-500/20 rounded-3xl backdrop-blur-2xl shadow-2xl shadow-emerald-500/5 overflow-hidden p-8">
+            {/* Logo */}
+            <div className="flex flex-col items-center mb-6">
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                className="w-16 h-16 rounded-full bg-[#0a0a0f] border-2 border-emerald-500/30 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/10"
+              >
+                <Key size={24} className="text-emerald-400" />
+              </motion.div>
+              <h1 className="text-xl font-bold text-gray-100 mb-1">لوحة التحكم</h1>
+              <p className="text-gray-400 text-sm">أدخل المفتاح السري للوصول</p>
+            </div>
+
+            <form onSubmit={handleLogin}>
+              {/* Error */}
+              {authError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center"
+                >
+                  {authError}
+                </motion.div>
+              )}
+
+              {/* Password Input */}
+              <div className="mb-6">
+                <label className="block text-gray-400 text-xs font-medium mb-2">المفتاح السري</label>
+                <div className="relative group">
+                  <Lock size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500/50 group-focus-within:text-emerald-400 transition-colors" />
+                  <input
+                    type="password"
+                    dir="ltr"
+                    value={secretInput}
+                    onChange={(e) => setSecretInput(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pr-10 pl-4 py-3 rounded-xl bg-[#111827]/80 border border-emerald-500/15 text-gray-100 text-sm placeholder:text-gray-600 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all duration-300"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Submit */}
+              <motion.button
+                type="submit"
+                disabled={authLoading}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-l from-emerald-600 to-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-shadow duration-300 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {authLoading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <>
+                    <Key size={18} />
+                    <span>دخول لوحة التحكم</span>
+                  </>
+                )}
+              </motion.button>
+            </form>
+
+            {/* Back link */}
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => router.push('/')}
+                className="text-gray-500 hover:text-gray-300 text-sm transition-colors flex items-center gap-1.5 mx-auto"
+              >
+                <ArrowRight size={14} />
+                <span>العودة للرئيسية</span>
+              </button>
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
+  // ===== ADMIN DASHBOARD =====
   const CATEGORY_LABELS: Record<string, string> = {
     tafsir: 'تفسير', aqaid: 'عقائد', fiqh: 'فقه', mantique: 'منطق',
     falsafa: 'فلسفة', tarikh: 'تاريخ', dua: 'أدعية', other: 'أخرى',
@@ -232,21 +364,15 @@ export default function AdminPage() {
                 <ArrowRight size={18} />
               </button>
               <div className="flex items-center gap-2">
-                {isOwner ? <Crown size={20} className="text-[#f59e0b]" /> : <Shield size={20} className="text-purple-400" />}
+                <Crown size={20} className="text-[#f59e0b]" />
                 <h1 className="text-gray-100 font-bold text-base">لوحة التحكم</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {session.user.image && (
-                <img src={session.user.image} alt="" className="w-8 h-8 rounded-full border border-emerald-500/30" />
-              )}
-              <span className="text-gray-300 text-sm hidden sm:block">
-                {(session.user as any)?.displayName || session.user.name}
+              <span className="text-[10px] px-2 py-0.5 rounded-full border bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20">
+                المالك
               </span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${ROLE_COLORS[role] || ROLE_COLORS.user}`}>
-                {ROLE_LABELS[role] || role}
-              </span>
-              <button onClick={() => { signOut({ callbackUrl: '/' }); }} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all" title="تسجيل الخروج">
+              <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all" title="تسجيل الخروج">
                 <LogOut size={16} />
               </button>
             </div>
@@ -314,14 +440,14 @@ export default function AdminPage() {
                 توزيع الكتب حسب التصنيف
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
+                {Object.entries(categoryCounts).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([cat, count]) => (
                   <div key={cat} className="bg-[#111827] rounded-xl p-3 border border-emerald-500/10">
                     <p className="text-gray-400 text-xs">{CATEGORY_LABELS[cat] || cat}</p>
-                    <p className="text-xl font-bold text-gray-100 mt-1">{count}</p>
+                    <p className="text-xl font-bold text-gray-100 mt-1">{count as number}</p>
                     <div className="w-full h-1 bg-[#1a1a2e] rounded-full mt-2">
                       <div
                         className="h-full bg-emerald-500/50 rounded-full transition-all duration-500"
-                        style={{ width: `${(count / totalBooks) * 100}%` }}
+                        style={{ width: `${((count as number) / totalBooks) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -353,8 +479,8 @@ export default function AdminPage() {
                         <p className="text-gray-200 text-sm font-medium truncate">{user.displayName || user.name || 'بدون اسم'}</p>
                         <p className="text-gray-500 text-[10px] truncate" dir="ltr">{user.email}</p>
                       </div>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${ROLE_COLORS[user.role]}`}>
-                        {ROLE_LABELS[user.role]}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${ROLE_COLORS[user.role] || ROLE_COLORS.user}`}>
+                        {ROLE_LABELS[user.role] || user.role}
                       </span>
                       <span className="text-gray-600 text-[10px]">
                         {new Date(user.createdAt).toLocaleDateString('ar')}
@@ -410,15 +536,13 @@ export default function AdminPage() {
             <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl overflow-hidden backdrop-blur-xl">
               <div className="px-5 py-4 border-b border-emerald-500/10 flex items-center justify-between">
                 <h2 className="text-gray-100 font-bold">جميع الكتب ({filteredBooks.length})</h2>
-                {isOwner && (
-                  <button
-                    onClick={() => { setActiveTab('dashboard'); router.push('/#fetch-engine'); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
-                  >
-                    <Eye size={14} />
-                    المحرك
-                  </button>
-                )}
+                <button
+                  onClick={() => { setActiveTab('dashboard'); router.push('/#fetch-engine'); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all"
+                >
+                  <Eye size={14} />
+                  المحرك
+                </button>
               </div>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -482,7 +606,7 @@ export default function AdminPage() {
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-1">
-                              {isOwner && editBookId === book.id && (
+                              {editBookId === book.id && (
                                 <>
                                   <button onClick={() => saveEditBook(book.id)} className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all">
                                     <Save size={14} />
@@ -492,7 +616,7 @@ export default function AdminPage() {
                                   </button>
                                 </>
                               )}
-                              {isOwner && editBookId !== book.id && (
+                              {editBookId !== book.id && (
                                 <>
                                   <button onClick={() => startEditBook(book)} className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all" title="تعديل">
                                     <Pencil size={14} />
@@ -512,15 +636,6 @@ export default function AdminPage() {
                                     </button>
                                   )}
                                 </>
-                              )}
-                              {role === 'admin' && !isOwner && (
-                                <button
-                                  onClick={() => window.open(book.url, '_blank')}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-                                  title="عرض"
-                                >
-                                  <Eye size={14} />
-                                </button>
                               )}
                             </div>
                           </td>
@@ -571,7 +686,7 @@ export default function AdminPage() {
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3">الدور</th>
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3 hidden sm:table-cell">الاسم المعروض</th>
                         <th className="text-right text-gray-500 text-xs font-medium px-5 py-3 hidden sm:table-cell">تاريخ التسجيل</th>
-                        {isOwner && <th className="text-right text-gray-500 text-xs font-medium px-5 py-3">إجراءات</th>}
+                        <th className="text-right text-gray-500 text-xs font-medium px-5 py-3">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -608,25 +723,23 @@ export default function AdminPage() {
                           <td className="px-5 py-3 text-gray-500 text-xs hidden sm:table-cell">
                             {new Date(user.createdAt).toLocaleDateString('ar')}
                           </td>
-                          {isOwner && (
-                            <td className="px-5 py-3">
-                              {user.role === 'owner' ? (
-                                <div className="flex items-center gap-1">
-                                  <Crown size={14} className="text-[#f59e0b]" />
-                                  <span className="text-gray-600 text-[10px]">مالك</span>
-                                </div>
-                              ) : (
-                                <select
-                                  value={user.role}
-                                  onChange={(e) => updateUserRole(user.id, e.target.value)}
-                                  className="bg-[#111827] border border-emerald-500/15 text-gray-300 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500/30 transition-all"
-                                >
-                                  <option value="user">مستخدم</option>
-                                  <option value="admin">مشرف</option>
-                                </select>
-                              )}
-                            </td>
-                          )}
+                          <td className="px-5 py-3">
+                            {user.role === 'owner' ? (
+                              <div className="flex items-center gap-1">
+                                <Crown size={14} className="text-[#f59e0b]" />
+                                <span className="text-gray-600 text-[10px]">مالك</span>
+                              </div>
+                            ) : (
+                              <select
+                                value={user.role}
+                                onChange={(e) => updateUserRole(user.id, e.target.value)}
+                                className="bg-[#111827] border border-emerald-500/15 text-gray-300 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500/30 transition-all"
+                              >
+                                <option value="user">مستخدم</option>
+                                <option value="admin">مشرف</option>
+                              </select>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -640,75 +753,44 @@ export default function AdminPage() {
         {/* ===== SETTINGS TAB ===== */}
         {activeTab === 'settings' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            {/* Account Info */}
-            <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl">
+            {/* Owner Settings */}
+            <div className="bg-[#0d1117]/80 border border-[#D4AF37]/15 rounded-2xl p-6 backdrop-blur-xl">
               <h2 className="text-gray-100 font-bold mb-4 flex items-center gap-2">
-                <UserCog size={18} className="text-emerald-400" />
-                معلومات الحساب
+                <Crown size={18} className="text-[#f59e0b]" />
+                إعدادات المالك
               </h2>
-              <div className="flex items-center gap-4 p-4 bg-[#111827] rounded-xl">
-                {session.user.image ? (
-                  <img src={session.user.image} alt="" className="w-16 h-16 rounded-full border-2 border-emerald-500/30" />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/30 flex items-center justify-center">
-                    <Users size={24} className="text-emerald-400" />
-                  </div>
-                )}
-                <div className="flex-1">
-                  <p className="text-gray-100 font-bold text-lg">{(session.user as any)?.displayName || session.user.name}</p>
-                  <p className="text-gray-400 text-sm" dir="ltr">{session.user.email}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${ROLE_COLORS[role]}`}>
-                      {ROLE_LABELS[role] || role}
-                    </span>
-                    <span className="text-gray-600 text-[10px]">
-                      انضم في {new Date((session.user as any)?.createdAt || Date.now()).toLocaleDateString('ar')}
-                    </span>
-                  </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-[#111827] rounded-xl border border-[#D4AF37]/10">
+                  <h3 className="text-gray-200 font-medium text-sm mb-2 flex items-center gap-2">
+                    <UserPlus size={16} className="text-purple-400" />
+                    رفع مشرف جديد
+                  </h3>
+                  <p className="text-gray-500 text-xs mb-3">
+                    يمكنك رفع أي مستخدم إلى مشرف من خلال تبويب &quot;إدارة المستخدمين&quot;. المشرفون يمكنهم إضافة وحذف الكتب.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-all"
+                  >
+                    <UserPlus size={14} />
+                    إدارة المشرفين
+                  </button>
+                </div>
+
+                <div className="p-4 bg-[#111827] rounded-xl border border-[#D4AF37]/10">
+                  <h3 className="text-gray-200 font-medium text-sm mb-2 flex items-center gap-2">
+                    <Key size={16} className="text-[#D4AF37]" />
+                    المفتاح السري
+                  </h3>
+                  <p className="text-gray-500 text-xs mb-1">
+                    لتغيير المفتاح السري، اضبط متغير البيئة <code className="text-[#D4AF37] bg-[#D4AF37]/10 px-1 rounded">ADMIN_SECRET</code> في إعدادات المشروع.
+                  </p>
+                  <p className="text-gray-600 text-[10px]">
+                    المفتاح الافتراضي: ali-library-2025
+                  </p>
                 </div>
               </div>
             </div>
-
-            {/* Owner Settings */}
-            {isOwner && (
-              <div className="bg-[#0d1117]/80 border border-[#D4AF37]/15 rounded-2xl p-6 backdrop-blur-xl">
-                <h2 className="text-gray-100 font-bold mb-4 flex items-center gap-2">
-                  <Crown size={18} className="text-[#f59e0b]" />
-                  إعدادات المالك
-                </h2>
-                <div className="space-y-4">
-                  <div className="p-4 bg-[#111827] rounded-xl border border-[#D4AF37]/10">
-                    <h3 className="text-gray-200 font-medium text-sm mb-2 flex items-center gap-2">
-                      <UserPlus size={16} className="text-purple-400" />
-                      رفع مشرف جديد
-                    </h3>
-                    <p className="text-gray-500 text-xs mb-3">
-                      يمكنك رفع أي مستخدم إلى مشرف من خلال تبويب &quot;إدارة المستخدمين&quot;. المشرفون يمكنهم إضافة وحذف الكتب.
-                    </p>
-                    <button
-                      onClick={() => setActiveTab('users')}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-all"
-                    >
-                      <UserPlus size={14} />
-                      إدارة المشرفين
-                    </button>
-                  </div>
-
-                  <div className="p-4 bg-[#111827] rounded-xl border border-[#D4AF37]/10">
-                    <h3 className="text-gray-200 font-medium text-sm mb-2 flex items-center gap-2">
-                      <Key size={16} className="text-[#D4AF37]" />
-                      تغيير المالك
-                    </h3>
-                    <p className="text-gray-500 text-xs mb-1">
-                      لتغيير المالك الأول، يجب تعديل متغير البيئة <code className="text-[#D4AF37] bg-[#D4AF37]/10 px-1 rounded">OWNER_EMAIL</code> في إعدادات المشروع على Vercel.
-                    </p>
-                    <p className="text-gray-600 text-[10px]">
-                      المالك الحالي هو الحساب الذي يتطابق بريده الإلكتروني مع متغير البيئة OWNER_EMAIL.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Site Settings */}
             <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl p-6 backdrop-blur-xl">
@@ -731,7 +813,7 @@ export default function AdminPage() {
                 </div>
                 <div className="flex items-center justify-between p-3 bg-[#111827] rounded-xl">
                   <span className="text-gray-400 text-sm">المصادقة</span>
-                  <span className="text-gray-300 text-xs">هاتف + كلمة السر + JWT</span>
+                  <span className="text-gray-300 text-xs">مفتاح سري + localStorage</span>
                 </div>
               </div>
             </div>
@@ -744,7 +826,7 @@ export default function AdminPage() {
               </div>
               <div className="space-y-3">
                 <button
-                  onClick={() => { signOut({ callbackUrl: '/' }); }}
+                  onClick={handleLogout}
                   className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-sm transition-all"
                 >
                   <LogOut size={16} />

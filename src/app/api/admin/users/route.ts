@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAppSession } from '@/lib/session';
 import { prisma } from '@/lib/db';
 
-// GET /api/admin/users — Owner/Admin: list all users
-export async function GET() {
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'ali-library-2025';
+
+// Helper to verify admin auth via Bearer token
+function verifyAdminAuth(req: NextRequest): boolean {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
+  const token = authHeader.slice(7);
+  return token === ADMIN_SECRET;
+}
+
+// GET /api/admin/users — list all users
+export async function GET(req: NextRequest) {
   try {
-    const session = await getAppSession();
-    if (!session?.user) {
+    if (!verifyAdminAuth(req)) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
-    }
-    const role = session.user.role;
-    if (role !== 'owner' && role !== 'admin') {
-      return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 403 });
     }
 
     const users = await prisma.user.findMany({
@@ -33,15 +37,11 @@ export async function GET() {
   }
 }
 
-// PUT /api/admin/users — Owner only: update user role
+// PUT /api/admin/users — update user role
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getAppSession();
-    if (!session?.user) {
+    if (!verifyAdminAuth(req)) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
-    }
-    if (session.user.role !== 'owner') {
-      return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 403 });
     }
 
     const { userId, role } = await req.json();
@@ -50,11 +50,6 @@ export async function PUT(req: NextRequest) {
     }
     if (!['user', 'admin'].includes(role)) {
       return NextResponse.json({ success: false, error: 'دور غير صالح' });
-    }
-
-    // Prevent owner from demoting themselves
-    if (session.user.id === userId && role !== 'owner') {
-      return NextResponse.json({ success: false, error: 'لا يمكنك تغيير دورك' });
     }
 
     await prisma.user.update({

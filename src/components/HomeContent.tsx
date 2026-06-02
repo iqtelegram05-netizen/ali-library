@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppSession } from '@/hooks/useAppSession';
 
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
@@ -34,7 +33,6 @@ import CosmicParticles from '@/components/CosmicParticles';
 import FloatingBookQuotes from '@/components/FloatingBookQuotes';
 import GeoHoverEffect from '@/components/GeoHoverEffect';
 import PageCustomizer from '@/components/PageCustomizer';
-import AuthModals from '@/components/AuthModals';
 
 /* ===================================================================
    CONSTANTS & DATA
@@ -160,15 +158,15 @@ const HERO_BUTTONS = [
    =================================================================== */
 
 export default function Home() {
-  const { session, status, refresh: refreshSession } = useAppSession();
   const [activeSection, setActiveSection] = useState('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPortal, setShowPortal] = useState(true);
   const [books, setBooks] = useState<BookItem[]>([]);
   const [booksLoaded, setBooksLoaded] = useState(false);
-
-  const userRole = (session?.user as any)?.role || 'user';
-  const isAdmin = userRole === 'owner' || userRole === 'admin';
+  const [isAdmin, setIsAdmin] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('ali-admin-auth') === 'true';
+    return false;
+  });
 
   // جلب الكتب من الخادم (عام للجميع)
   const fetchBooks = useCallback(async () => {
@@ -236,7 +234,6 @@ export default function Home() {
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         isAdmin={isAdmin}
-        session={session}
       />
 
       {/* Mobile Menu Overlay */}
@@ -246,7 +243,6 @@ export default function Home() {
             scrollToSection={scrollToSection}
             setMobileMenuOpen={setMobileMenuOpen}
             isAdmin={isAdmin}
-            session={session}
           />
         )}
       </AnimatePresence>
@@ -311,15 +307,13 @@ export default function Home() {
    NAVIGATION
    =================================================================== */
 
-function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, isAdmin, session }: {
+function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileMenuOpen, isAdmin }: {
   activeSection: string;
   scrollToSection: (id: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
-  session: any;
 }) {
-  const { refresh: refreshSession } = useAppSession();
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const router = useRouter();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
@@ -378,10 +372,6 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Auth Buttons - Desktop */}
-            <div className="hidden lg:block">
-              <AuthModals session={session} onRefresh={refreshSession} />
-            </div>
             <button
               className="lg:hidden p-2 rounded-lg text-gray-100 hover:bg-[#0d1117] transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -395,14 +385,12 @@ function Navigation({ activeSection, scrollToSection, mobileMenuOpen, setMobileM
   );
 }
 
-function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, session }: {
+function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin }: {
   scrollToSection: (id: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   isAdmin: boolean;
-  session: any;
 }) {
   const router = useRouter();
-  const { refresh: refreshSession } = useAppSession();
   const navItems = isAdmin ? ADMIN_NAV_ITEMS : NAV_ITEMS;
 
   return (
@@ -427,11 +415,6 @@ function MobileMenu({ scrollToSection, setMobileMenuOpen, isAdmin, session }: {
               <span>لوحة التحكم</span>
             </button>
           )}
-
-          {/* Mobile Auth Buttons */}
-          <div className="border-t border-emerald-500/10 mt-2 pt-2">
-            <AuthModals session={session} onRefresh={refreshSession} />
-          </div>
         </div>
       </div>
     </motion.div>
@@ -1011,12 +994,10 @@ function groupBooks(books: BookItem[]): BookGroup[] {
 }
 
 function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks: React.Dispatch<React.SetStateAction<BookItem[]>> }) {
-  const { session } = useAppSession();
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const router = useRouter();
-  const userRole = (session?.user as any)?.role || 'user';
-  const isAdmin = userRole === 'owner';
+  const isAdmin = typeof window !== 'undefined' && localStorage.getItem('ali-admin-auth') === 'true';
 
   const removeBook = async (id: string) => {
     try {
