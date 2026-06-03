@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, type ComponentType } f
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import Link from 'next/link';
 import {
   BookOpen, Upload, Brain, MessageCircle, Search, Sparkles,
   Shield, ExternalLink, Send, FileText,
@@ -1114,9 +1115,8 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
                           className="overflow-hidden border-t border-[#D4AF37]/10">
                           <div className="p-3 space-y-1.5 bg-[#0a0a0f]/40">
                             {group.books.map((book) => (
-                              <div key={book.id}
-                                className="flex items-center gap-2 p-2.5 rounded-lg hover:bg-[#111827] transition-all cursor-pointer group/part"
-                                onClick={() => navigateToReader(book.url, book.name)}>
+                              <Link key={book.id} href={`/book/${book.id}`}
+                                className="flex items-center gap-2 p-2.5 rounded-lg hover:bg-[#111827] transition-all cursor-pointer group/part">
                                 <BookOpen size={14} className="text-emerald-400/60 shrink-0" />
                                 <span className="flex-1 text-gray-300 text-xs truncate hover:text-emerald-300 transition-colors">{book.name}</span>
                                 {isAdmin && (
@@ -1125,7 +1125,7 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
                                   <Trash2 size={11} />
                                 </button>
                                 )}
-                              </div>
+                              </Link>
                             ))}
                             {/* زر حذف الكل — فقط للمالك */}
                             {isAdmin && (
@@ -1149,8 +1149,8 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
               const catLabel = CATEGORY_LABEL_MAP[book.category] || 'أخرى';
               return (
                 <motion.div key={book.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
-                  className="book-card bg-[#0d1117]/80 border border-emerald-500/15 rounded-xl p-4 hover:shadow-lg hover:shadow-emerald-500/5 backdrop-blur-xl transition-all group cursor-pointer"
-                  onClick={() => navigateToReader(book.url, book.name)}>
+                  className="book-card bg-[#0d1117]/80 border border-emerald-500/15 rounded-xl p-4 hover:shadow-lg hover:shadow-emerald-500/5 backdrop-blur-xl transition-all group cursor-pointer">
+                  <Link href={`/book/${book.id}`} className="block">
                   <div className="flex items-start gap-3">
                     <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/15 shrink-0">
                       <BookOpen size={18} className="text-emerald-400" />
@@ -1160,18 +1160,21 @@ function BooksArchiveSection({ books, setBooks }: { books: BookItem[]; setBooks:
                       <div className="flex items-center gap-2 mb-2">
                         <span className="px-2 py-0.5 rounded-md bg-[#D4AF37]/10 border border-[#D4AF37]/20 text-[#D4AF37] text-[10px]">{catLabel}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 mt-1">
                         <span className="inline-flex items-center gap-1 text-[#D4AF37] text-xs opacity-70">
                           <Eye size={12} /><span>اضغط لقراءة الكتاب</span>
                         </span>
-                        {isAdmin && (
-                        <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }} className="inline-flex items-center gap-1 text-red-400/50 text-xs hover:text-red-400 transition-colors ml-auto">
-                          <Trash2 size={12} />
-                        </button>
-                        )}
                       </div>
                     </div>
                   </div>
+                  </Link>
+                  {isAdmin && (
+                  <div className="flex justify-end mt-2">
+                    <button onClick={(e) => { e.stopPropagation(); removeBook(book.id); }} className="inline-flex items-center gap-1 text-red-400/50 text-xs hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  )}
                 </motion.div>
               );
             })}
@@ -1345,6 +1348,26 @@ function FooterSection() {
           <span>مدعوم بالذكاء الاصطناعي</span><span>|</span><span>تصميم هندسي معقد</span><span>|</span><span>Al-Ali Digital Library</span>
         </div>
         <div className="flex items-center justify-center gap-1 text-gray-600/50 text-[10px]"><Quote size={10} /><span>بسم الله الرحمن الرحيم</span></div>
+
+        {/* SEO Navigation Links */}
+        <nav className="mt-6 flex flex-wrap justify-center gap-3 text-[10px] text-gray-600" aria-label="SEO Footer Links">
+          <Link href="/books" className="hover:text-emerald-400 transition-colors">جميع الكتب</Link>
+          <span>|</span>
+          <Link href="/category/tafsir" className="hover:text-emerald-400 transition-colors">تفسير</Link>
+          <span>|</span>
+          <Link href="/category/aqaid" className="hover:text-emerald-400 transition-colors">عقائد</Link>
+          <span>|</span>
+          <Link href="/category/fiqh" className="hover:text-emerald-400 transition-colors">فقه</Link>
+          <span>|</span>
+          <Link href="/category/mantique" className="hover:text-emerald-400 transition-colors">منطق</Link>
+          <span>|</span>
+          <Link href="/category/falsafa" className="hover:text-emerald-400 transition-colors">فلسفة</Link>
+          <span>|</span>
+          <Link href="/category/tarikh" className="hover:text-emerald-400 transition-colors">تاريخ</Link>
+          <span>|</span>
+          <Link href="/category/dua" className="hover:text-emerald-400 transition-colors">أدعية</Link>
+        </nav>
+
         {/* Admin Panel Link */}
         <div className="mt-4">
           <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/admin'; }}

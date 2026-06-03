@@ -7,20 +7,33 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   headers: async () => [
+    // API routes: no cache
     {
-      source: "/(.*)",
+      source: "/api/:path*",
       headers: [
         {
           key: "Cache-Control",
-          value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+          value: "no-store, no-cache, must-revalidate",
         },
+      ],
+    },
+    // Static assets: cache aggressively
+    {
+      source: "/(.*)\\.(jpg|jpeg|png|gif|svg|ico|webp|woff|woff2|css|js)",
+      headers: [
         {
-          key: "Pragma",
-          value: "no-cache",
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
         },
+      ],
+    },
+    // HTML pages: short cache
+    {
+      source: "/:path((?!api).*)*",
+      headers: [
         {
-          key: "Expires",
-          value: "0",
+          key: "Cache-Control",
+          value: "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
         },
       ],
     },
