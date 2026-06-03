@@ -225,6 +225,13 @@ export default async function BookPage({ params }: PageProps) {
               اقرأ الكتاب الآن
             </a>
             <Link
+              href={`/book/${book.id}/read`}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all text-gray-300 hover:text-gray-100"
+              style={{ backgroundColor: '#111827', border: '1px solid rgba(16,185,129,0.15)' }}
+            >
+              قراءة مباشرة (SEO)
+            </Link>
+            <Link
               href={`/category/${book.category}`}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all text-gray-300 hover:text-gray-100"
               style={{ backgroundColor: '#111827', border: '1px solid rgba(16,185,129,0.15)' }}

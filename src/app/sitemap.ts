@@ -30,7 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // Add individual book pages from the database
+  // Add individual book pages and read pages from the database
   const bookPages: MetadataRoute.Sitemap = [];
   try {
     const books = await prisma.book.findMany({
@@ -39,11 +39,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     for (const book of books) {
+      // Book detail page
       bookPages.push({
         url: `${SITE_URL}/book/${book.id}`,
         lastModified: book.updatedAt || new Date(),
         changeFrequency: 'monthly',
         priority: 0.7,
+      });
+      // Book READ page (SSR with actual content — highest SEO value)
+      bookPages.push({
+        url: `${SITE_URL}/book/${book.id}/read`,
+        lastModified: book.updatedAt || new Date(),
+        changeFrequency: 'monthly',
+        priority: 0.85,
       });
     }
   } catch (error) {
