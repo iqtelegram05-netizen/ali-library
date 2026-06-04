@@ -110,6 +110,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <meta name="google-site-verification" content="gP4nD24liaYlnH8imdLR1UHDR8tWi27VcZIewWkinGA" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: '#0a0a0f', color: '#e2e8f0' }}
