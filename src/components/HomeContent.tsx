@@ -13,8 +13,6 @@ import {
   Zap, Globe, Library, Eye, Quote, BookType, Scale, Clock, Trash2, Bug,
   ChevronDown, Layers, ShieldCheck,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-
 /* MermaidRenderer: loaded via state to avoid React 19 Suspense (#310) */
 function LazyMermaidRenderer({ chart }: { chart: string }) {
   const [Comp, setComp] = useState<ComponentType<{ chart: string }> | null>(null);
@@ -136,7 +134,7 @@ const NAV_ITEMS = [
   { id: 'hero', label: 'الرئيسية', icon: Globe },
   { id: 'books-archive', label: 'الكتب', icon: Library },
   { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
-  { id: 'search', label: 'البحث المتطور', icon: Search },
+  { id: 'search', label: 'بحث الكتب', icon: Search },
 ];
 
 const ADMIN_NAV_ITEMS = [
@@ -144,14 +142,14 @@ const ADMIN_NAV_ITEMS = [
   { id: 'fetch-engine', label: 'إحضار الكتب', icon: BookType },
   { id: 'books-archive', label: 'الكتب', icon: Library },
   { id: 'biography', label: 'سيرة آل محمد', icon: Heart },
-  { id: 'search', label: 'البحث المتطور', icon: Search },
+  { id: 'search', label: 'بحث الكتب', icon: Search },
 ];
 
 const HERO_BUTTONS = [
   { icon: BookType, label: 'إحضار الكتب', section: 'fetch-engine' },
   { icon: Library, label: 'الكتب', section: 'books-archive' },
   { icon: Heart, label: 'سيرة آل محمد', section: 'biography' },
-  { icon: Search, label: 'البحث المتطور', section: 'search' },
+  { icon: Search, label: 'بحث الكتب', section: 'search' },
 ];
 
 /* ===================================================================
@@ -1277,54 +1275,190 @@ function BiographySection() {
 
 function AdvancedSearchSection() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState('');
+  const [books, setBooks] = useState<Array<{ id: string; name: string; url: string; category: string }>>([]);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return; setLoading(true); setResults('');
+  const fetchBooks = useCallback(async (searchQuery: string) => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'search', content: query }) });
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
       const data = await res.json();
-      setResults(data.success ? data.result : 'حدث خطأ: ' + (data.error || ''));
-    } catch { setResults('فشل الاتصال بالخادم. حاول مرة أخرى.'); }
+      if (data.success && Array.isArray(data.books)) {
+        setBooks(data.books);
+      }
+    } catch {
+      setBooks([]);
+    }
     setLoading(false);
+    setHasSearched(true);
+  }, []);
+
+  // Auto-fetch on mount (show all books grouped by category)
+  useEffect(() => {
+    fetchBooks('');
+  }, [fetchBooks]);
+
+  const handleInputChange = (value: string) => {
+    setQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchBooks(value);
+    }, 300);
   };
+
+  // Group books by category when query is empty
+  const groupedBooks = query.trim() === ''
+    ? books.reduce<Record<string, typeof books>>((acc, book) => {
+        const cat = book.category || 'other';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(book);
+        return acc;
+      }, {})
+    : null;
+
+  const categoryOrder = ['tafsir', 'aqaid', 'fiqh', 'mantique', 'falsafa', 'tarikh', 'dua', 'other'];
 
   return (
     <section id="search" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="section-divider mb-10 sm:mb-20" />
-      <div className="max-w-4xl mx-auto">
-        <SectionHeader icon={Search} title="البحث المتطور" subtitle="بحث موضوعي يعتمد على المنطق والمعنى وليس مجرد الكلمات - مفهومي وعميق" />
+      <div className="max-w-5xl mx-auto">
+        <SectionHeader icon={Search} title="محرك بحث الكتب" subtitle="ابحث في جميع كتب المكتبة بالاسم — سريع ودقيق" />
+
         <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-6 sm:mt-8 p-4 sm:p-8 backdrop-blur-xl shadow-lg shadow-black/20">
+          {/* Search Input */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="flex-1 relative">
               <Search size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500" />
-              <input type="text" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
-                placeholder="ابحث عن موضوع، مسألة فقهية، مفهوم عقائدي..."
-                className="w-full pr-11 pl-4 py-3.5 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => handleInputChange(e.target.value)}
+                placeholder="ابحث عن كتاب بالاسم..."
+                className="w-full pr-11 pl-4 py-3.5 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all"
+                dir="rtl"
+              />
             </div>
-            <button onClick={handleSearch} disabled={loading || !query.trim()} className="btn-green px-6 py-3.5 rounded-xl text-white font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 transition-all shrink-0">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-              <span>{loading ? 'جارٍ البحث...' : 'بحث موضوعي'}</span>
-            </button>
+            {query.trim() && (
+              <button
+                onClick={() => { setQuery(''); fetchBooks(''); }}
+                className="px-5 py-3.5 rounded-xl text-gray-300 text-sm font-medium border border-gray-600 hover:border-gray-500 transition-all shrink-0"
+              >
+                مسح البحث
+              </button>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {['التوحيد', 'الإمامة', 'العدل الإلهي', 'النبوة', 'المعاد', 'فقه الصلاة', 'أصول الدين', 'فروع الدين'].map(tag => (
-              <button key={tag} onClick={() => setQuery(tag)} className="px-3 py-1.5 rounded-lg bg-[#111827] border border-emerald-500/15 text-gray-300 text-xs hover:border-emerald-500/25 transition-all">{tag}</button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 mb-6 text-[11px] text-gray-500"><Brain size={12} /><span>يعتمد على تحليل المعنى والمفهوم وليس مجرد مطابقة الكلمات</span></div>
-          {loading ? (
+
+          {/* Results Count */}
+          {hasSearched && !loading && (
+            <div className="flex items-center gap-2 mb-6">
+              <Library size={14} className="text-emerald-400" />
+              <span className="text-gray-400 text-sm">
+                {query.trim()
+                  ? `تم العثور على ${books.length} نتيجة لـ "${query.trim()}"`
+                  : `إجمالي الكتب في المكتبة: ${books.length}`
+                }
+              </span>
+            </div>
+          )}
+
+          {/* Loading */}
+          {loading && (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-400">
-              <Loader2 size={32} className="animate-spin text-emerald-400" /><span className="text-sm">جارٍ التحليل الموضوعي...</span>
-              <div className="flex gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /><div className="w-2 h-2 rounded-full bg-emerald-400 typing-dot" /></div>
+              <Loader2 size={32} className="animate-spin text-emerald-400" />
+              <span className="text-sm">جارٍ البحث...</span>
             </div>
-          ) : results ? (
-            <div className="rounded-xl bg-[#111827]/50 border border-emerald-500/10 p-5">
-              <div className="flex items-center gap-2 mb-3"><CheckCircle2 size={16} className="text-emerald-400" /><span className="text-gray-200 text-sm font-medium">نتائج البحث الموضوعي</span></div>
-              <div className="prose prose-sm max-w-none prose-invert text-gray-200 leading-relaxed text-sm prose-headings:text-emerald-300 prose-strong:text-[#D4AF37] prose-li:text-gray-300"><ReactMarkdown>{results}</ReactMarkdown></div>
+          )}
+
+          {/* Search Results (flat list when query is present) */}
+          {!loading && hasSearched && query.trim() && books.length > 0 && (
+            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(16,185,129,0.3) transparent' }}>
+              {books.map((book, index) => (
+                <motion.div
+                  key={book.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.5) }}
+                >
+                  <Link
+                    href={`/book/${book.id}/read`}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#111827]/60 border border-emerald-500/8 hover:border-emerald-500/20 hover:bg-[#111827] transition-all group"
+                  >
+                    <BookOpen size={16} className="text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="flex-1 text-gray-200 text-sm truncate group-hover:text-gray-100 transition-colors" dir="rtl">
+                      {book.name}
+                    </span>
+                    <span
+                      className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border"
+                      style={{
+                        color: book.category === 'other' ? '#6b7280' : '#10b981',
+                        backgroundColor: book.category === 'other' ? 'rgba(107,114,128,0.1)' : 'rgba(16,185,129,0.1)',
+                        borderColor: book.category === 'other' ? 'rgba(107,114,128,0.2)' : 'rgba(16,185,129,0.2)',
+                      }}
+                    >
+                      {CATEGORY_LABEL_MAP[book.category] || 'أخرى'}
+                    </span>
+                    <ExternalLink size={12} className="text-gray-600 group-hover:text-gray-400 shrink-0 transition-colors" />
+                  </Link>
+                </motion.div>
+              ))}
             </div>
-          ) : null}
+          )}
+
+          {/* Search Results (grouped by category when query is empty) */}
+          {!loading && hasSearched && !query.trim() && groupedBooks && Object.keys(groupedBooks).length > 0 && (
+            <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(16,185,129,0.3) transparent' }}>
+              {categoryOrder
+                .filter(cat => groupedBooks[cat] && groupedBooks[cat].length > 0)
+                .map(cat => (
+                  <div key={cat}>
+                    {/* Category Header */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span
+                        className="px-3 py-1 rounded-full text-xs font-medium border"
+                        style={{
+                          color: cat === 'other' ? '#6b7280' : '#10b981',
+                          backgroundColor: cat === 'other' ? 'rgba(107,114,128,0.1)' : 'rgba(16,185,129,0.1)',
+                          borderColor: cat === 'other' ? 'rgba(107,114,128,0.2)' : 'rgba(16,185,129,0.2)',
+                        }}
+                      >
+                        {CATEGORY_LABEL_MAP[cat] || 'أخرى'}
+                      </span>
+                      <span className="text-gray-500 text-xs">({groupedBooks[cat]!.length} كتاب)</span>
+                      <div className="flex-1 h-px bg-emerald-500/8" />
+                    </div>
+                    {/* Books in category */}
+                    <div className="space-y-1.5">
+                      {groupedBooks[cat]!.map(book => (
+                        <Link
+                          key={book.id}
+                          href={`/book/${book.id}/read`}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#111827]/40 border border-emerald-500/5 hover:border-emerald-500/15 hover:bg-[#111827]/80 transition-all group"
+                        >
+                          <BookOpen size={14} className="text-emerald-400/70 shrink-0 group-hover:text-emerald-400 transition-colors" />
+                          <span className="flex-1 text-gray-300 text-sm truncate group-hover:text-gray-100 transition-colors" dir="rtl">
+                            {book.name}
+                          </span>
+                          <ExternalLink size={11} className="text-gray-600 group-hover:text-gray-400 shrink-0 transition-colors" />
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* No Results */}
+          {!loading && hasSearched && books.length === 0 && (
+            <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-500">
+              <Search size={32} className="text-gray-600" />
+              <span className="text-sm">
+                {query.trim() ? `لم يتم العثور على كتب تطابق "${query.trim()}"` : 'لا توجد كتب في المكتبة بعد'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </section>

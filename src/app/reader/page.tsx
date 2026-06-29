@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight,
@@ -54,6 +54,52 @@ function ReaderContent() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryText, setSummaryText] = useState<string>('');
   const [summaryError, setSummaryError] = useState<string>('');
+  const [bookId, setBookId] = useState<string>('');
+  const [copyToast, setCopyToast] = useState(false);
+  const contentDivRef = useRef<HTMLDivElement>(null);
+
+  // Look up book ID by URL
+  useEffect(() => {
+    if (!bookUrl) return;
+    async function lookupBookId() {
+      try {
+        const res = await fetch(`/api/books`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.books)) {
+          const match = data.books.find((b: any) => b.url === bookUrl);
+          if (match) setBookId(match.id);
+        }
+      } catch {}
+    }
+    lookupBookId();
+  }, [bookUrl]);
+
+  // Copy with Source: intercept copy events on the content div
+  useEffect(() => {
+    const div = contentDivRef.current;
+    if (!div) return;
+
+    const handleCopy = (e: ClipboardEvent) => {
+      const selection = window.getSelection();
+      const selectedText = selection?.toString();
+      if (!selectedText || !selectedText.trim()) return;
+
+      const sourceLine = `\n📖 المصدر: ${bookTitle} | صفحة ${currentPage} | مكتبة العلي الرقمية | https://ali-library.vercel.app/book/${bookId}/read`;
+      const textWithSource = selectedText + sourceLine;
+
+      e.preventDefault();
+      if (e.clipboardData) {
+        e.clipboardData.setData('text/plain', textWithSource);
+      }
+
+      // Show toast
+      setCopyToast(true);
+      setTimeout(() => setCopyToast(false), 2000);
+    };
+
+    div.addEventListener('copy', handleCopy);
+    return () => div.removeEventListener('copy', handleCopy);
+  }, [bookTitle, currentPage, bookId, content]);
 
   // Fetch book metadata and total pages on mount
   useEffect(() => {
@@ -354,10 +400,26 @@ function ReaderContent() {
 
               {/* Book text content */}
               <div
+                ref={contentDivRef}
                 className="leading-loose text-base sm:text-lg whitespace-pre-wrap break-words"
                 style={{ color: textColor, fontFamily: '"Noto Kufi Arabic", "Amiri", "Traditional Arabic", serif', lineHeight: '2.5' }}
                 dangerouslySetInnerHTML={{ __html: content }}
               />
+
+              {/* Copy Toast */}
+              <AnimatePresence>
+                {copyToast && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg"
+                    style={{ backgroundColor: 'rgba(16,185,129,0.95)', color: '#ffffff', backdropFilter: 'blur(8px)' }}
+                  >
+                    <span>تم النسخ مع المصدر ✓</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Progress bar */}
