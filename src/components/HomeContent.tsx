@@ -1270,6 +1270,38 @@ function BiographySection() {
 }
 
 /* ===================================================================
+   HIGHLIGHT MATCH — تمييز كلمة البحث في النص
+   =================================================================== */
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const parts: React.ReactNode[] = [];
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  let lastIndex = 0;
+  let idx = lowerText.indexOf(lowerQuery, lastIndex);
+
+  while (idx !== -1) {
+    if (idx > lastIndex) {
+      parts.push(text.substring(lastIndex, idx));
+    }
+    parts.push(
+      <span key={idx} style={{ backgroundColor: 'rgba(212,175,55,0.25)', color: '#D4AF37', padding: '0 2px', borderRadius: '3px' }}>
+        {text.substring(idx, idx + query.length)}
+      </span>
+    );
+    lastIndex = idx + query.length;
+    idx = lowerText.indexOf(lowerQuery, lastIndex);
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? <>{parts}</> : text;
+}
+
+/* ===================================================================
    ADVANCED SEARCH SECTION
    =================================================================== */
 
@@ -1278,38 +1310,87 @@ function AdvancedSearchSection() {
   const [books, setBooks] = useState<Array<{ id: string; name: string; url: string; category: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchMode, setSearchMode] = useState<'name' | 'content'>('name');
+  const [contentResults, setContentResults] = useState<Array<{
+    bookId: string;
+    bookName: string;
+    bookUrl: string;
+    category: string;
+    pageNumber: number;
+    snippet: string;
+    matchType: string;
+  }>>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contentSearchProgress, setContentSearchProgress] = useState('');
 
   const fetchBooks = useCallback(async (searchQuery: string) => {
     setLoading(true);
+    setContentSearchProgress('');
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&mode=${searchMode}`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.books)) {
-        setBooks(data.books);
+      if (data.success) {
+        if (data.mode === 'content') {
+          setContentResults(data.results || []);
+          setBooks([]);
+        } else {
+          if (Array.isArray(data.books)) {
+            setBooks(data.books);
+          }
+          setContentResults([]);
+        }
       }
     } catch {
       setBooks([]);
+      setContentResults([]);
     }
     setLoading(false);
     setHasSearched(true);
-  }, []);
+    setContentSearchProgress('');
+  }, [searchMode]);
 
   // Auto-fetch on mount (show all books grouped by category)
   useEffect(() => {
-    fetchBooks('');
-  }, [fetchBooks]);
+    if (searchMode === 'name') {
+      fetchBooks('');
+    }
+  }, [searchMode, fetchBooks]);
 
   const handleInputChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const debounceTime = searchMode === 'content' ? 800 : 300;
     debounceRef.current = setTimeout(() => {
-      fetchBooks(value);
-    }, 300);
+      if (searchMode === 'content' && value.trim()) {
+        setLoading(true);
+        setContentSearchProgress('جارٍ البحث في محتويات الكتب... قد يستغرق ذلك بضع ثوانٍ');
+        fetchBooks(value);
+      } else {
+        fetchBooks(value);
+      }
+    }, debounceTime);
+  };
+
+  const handleModeSwitch = (mode: 'name' | 'content') => {
+    setSearchMode(mode);
+    setBooks([]);
+    setContentResults([]);
+    setHasSearched(false);
+    if (query.trim()) {
+      if (mode === 'content') {
+        setLoading(true);
+        setContentSearchProgress('جارٍ البحث في محتويات الكتب... قد يستغرق ذلك بضع ثوانٍ');
+        // fetchBooks will be called by the useEffect
+      } else {
+        fetchBooks(query);
+      }
+    } else if (mode === 'name') {
+      fetchBooks('');
+    }
   };
 
   // Group books by category when query is empty
-  const groupedBooks = query.trim() === ''
+  const groupedBooks = query.trim() === '' && searchMode === 'name'
     ? books.reduce<Record<string, typeof books>>((acc, book) => {
         const cat = book.category || 'other';
         if (!acc[cat]) acc[cat] = [];
@@ -1324,9 +1405,38 @@ function AdvancedSearchSection() {
     <section id="search" className="relative py-10 sm:py-20 px-4" style={{ backgroundColor: '#0a0a0f' }}>
       <div className="section-divider mb-10 sm:mb-20" />
       <div className="max-w-5xl mx-auto">
-        <SectionHeader icon={Search} title="محرك بحث الكتب" subtitle="ابحث في جميع كتب المكتبة بالاسم — سريع ودقيق" />
+        <SectionHeader icon={Search} title="محرك بحث الكتب" subtitle="ابحث في أسماء الكتب أو داخل محتوياتها مباشرة" />
 
         <div className="bg-[#0d1117]/80 border border-emerald-500/15 rounded-2xl mt-6 sm:mt-8 p-4 sm:p-8 backdrop-blur-xl shadow-lg shadow-black/20">
+          {/* Search Mode Tabs */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => handleModeSwitch('name')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all border ${
+                searchMode === 'name'
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-[#111827] border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+              }`}
+            >
+              <BookOpen size={14} />
+              <span>بحث بالاسم</span>
+            </button>
+            <button
+              onClick={() => handleModeSwitch('content')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all border ${
+                searchMode === 'content'
+                  ? 'bg-[#D4AF37]/15 border-[#D4AF37]/30 text-[#D4AF37]'
+                  : 'bg-[#111827] border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+              }`}
+            >
+              <FileText size={14} />
+              <span>بحث في المحتوى</span>
+            </button>
+            {searchMode === 'content' && (
+              <span className="text-gray-500 text-[10px] mr-auto">يبحث داخل نصوص صفحات الكتب</span>
+            )}
+          </div>
+
           {/* Search Input */}
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <div className="flex-1 relative">
@@ -1335,14 +1445,14 @@ function AdvancedSearchSection() {
                 type="text"
                 value={query}
                 onChange={e => handleInputChange(e.target.value)}
-                placeholder="ابحث عن كتاب بالاسم..."
+                placeholder={searchMode === 'content' ? 'ابحث عن كلمة أو عبارة داخل محتويات الكتب...' : 'ابحث عن كتاب بالاسم...'}
                 className="w-full pr-11 pl-4 py-3.5 rounded-xl bg-[#111827] border border-emerald-500/15 text-gray-100 text-sm input-glow focus:outline-none transition-all"
                 dir="rtl"
               />
             </div>
             {query.trim() && (
               <button
-                onClick={() => { setQuery(''); fetchBooks(''); }}
+                onClick={() => { setQuery(''); setContentResults([]); fetchBooks(''); }}
                 className="px-5 py-3.5 rounded-xl text-gray-300 text-sm font-medium border border-gray-600 hover:border-gray-500 transition-all shrink-0"
               >
                 مسح البحث
@@ -1351,7 +1461,19 @@ function AdvancedSearchSection() {
           </div>
 
           {/* Results Count */}
-          {hasSearched && !loading && (
+          {hasSearched && !loading && searchMode === 'content' && (
+            <div className="flex items-center gap-2 mb-6">
+              <FileText size={14} className="text-[#D4AF37]" />
+              <span className="text-gray-400 text-sm">
+                {contentResults.length > 0
+                  ? `تم العثور على ${contentResults.length} نتيجة في المحتوى لـ "${query.trim()}"`
+                  : `لم يتم العثور على نتائج لـ "${query.trim()}" في محتويات الكتب`
+                }
+              </span>
+            </div>
+          )}
+
+          {hasSearched && !loading && searchMode === 'name' && (
             <div className="flex items-center gap-2 mb-6">
               <Library size={14} className="text-emerald-400" />
               <span className="text-gray-400 text-sm">
@@ -1367,12 +1489,65 @@ function AdvancedSearchSection() {
           {loading && (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-400">
               <Loader2 size={32} className="animate-spin text-emerald-400" />
-              <span className="text-sm">جارٍ البحث...</span>
+              <span className="text-sm">
+                {contentSearchProgress || 'جارٍ البحث...'}
+              </span>
+              {searchMode === 'content' && (
+                <span className="text-gray-600 text-xs">يتم فحص محتويات الكتب صفحة بصفحة</span>
+              )}
             </div>
           )}
 
-          {/* Search Results (flat list when query is present) */}
-          {!loading && hasSearched && query.trim() && books.length > 0 && (
+          {/* ===== CONTENT SEARCH RESULTS ===== */}
+          {!loading && hasSearched && searchMode === 'content' && contentResults.length > 0 && (
+            <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(16,185,129,0.3) transparent' }}>
+              {contentResults.map((result, index) => (
+                <motion.div
+                  key={`${result.bookId}-${result.pageNumber}-${index}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.5) }}
+                >
+                  <a
+                    href={`/reader?${new URLSearchParams({ url: result.bookUrl, title: result.bookName, page: String(result.pageNumber) }).toString()}`}
+                    className="block px-4 py-3.5 rounded-xl bg-[#111827]/60 border border-emerald-500/8 hover:border-[#D4AF37]/25 hover:bg-[#111827] transition-all group"
+                  >
+                    {/* Book name + category */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <BookOpen size={14} className="text-[#D4AF37] shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className="flex-1 text-gray-200 text-sm font-medium truncate group-hover:text-gray-100 transition-colors" dir="rtl">
+                        {result.bookName}
+                      </span>
+                      <span
+                        className="shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-medium border"
+                        style={{
+                          color: result.category === 'other' ? '#6b7280' : '#10b981',
+                          backgroundColor: result.category === 'other' ? 'rgba(107,114,128,0.1)' : 'rgba(16,185,129,0.1)',
+                          borderColor: result.category === 'other' ? 'rgba(107,114,128,0.2)' : 'rgba(16,185,129,0.2)',
+                        }}
+                      >
+                        {CATEGORY_LABEL_MAP[result.category] || 'أخرى'}
+                      </span>
+                    </div>
+
+                    {/* Snippet */}
+                    <div className="mr-6 text-gray-400 text-xs leading-relaxed" dir="rtl" style={{ lineHeight: '2' }}>
+                      {highlightMatch(result.snippet, query)}
+                    </div>
+
+                    {/* Page number */}
+                    <div className="flex items-center gap-1.5 mt-2 mr-6">
+                      <span className="text-gray-500 text-[10px]">صفحة {result.pageNumber}</span>
+                      <ExternalLink size={10} className="text-gray-600 group-hover:text-[#D4AF37] transition-colors" />
+                    </div>
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {/* ===== NAME SEARCH RESULTS (flat list when query is present) ===== */}
+          {!loading && hasSearched && searchMode === 'name' && query.trim() && books.length > 0 && (
             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(16,185,129,0.3) transparent' }}>
               {books.map((book, index) => (
                 <motion.div
@@ -1406,8 +1581,8 @@ function AdvancedSearchSection() {
             </div>
           )}
 
-          {/* Search Results (grouped by category when query is empty) */}
-          {!loading && hasSearched && !query.trim() && groupedBooks && Object.keys(groupedBooks).length > 0 && (
+          {/* ===== NAME SEARCH RESULTS (grouped by category when query is empty) ===== */}
+          {!loading && hasSearched && searchMode === 'name' && !query.trim() && groupedBooks && Object.keys(groupedBooks).length > 0 && (
             <div className="space-y-6 max-h-[600px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(16,185,129,0.3) transparent' }}>
               {categoryOrder
                 .filter(cat => groupedBooks[cat] && groupedBooks[cat].length > 0)
@@ -1451,13 +1626,26 @@ function AdvancedSearchSection() {
           )}
 
           {/* No Results */}
-          {!loading && hasSearched && books.length === 0 && (
-            <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-500">
-              <Search size={32} className="text-gray-600" />
-              <span className="text-sm">
-                {query.trim() ? `لم يتم العثور على كتب تطابق "${query.trim()}"` : 'لا توجد كتب في المكتبة بعد'}
-              </span>
-            </div>
+          {!loading && hasSearched && (
+            searchMode === 'name' && books.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-500">
+                <Search size={32} className="text-gray-600" />
+                <span className="text-sm">
+                  {query.trim() ? `لم يتم العثور على كتب تطابق "${query.trim()}"` : 'لا توجد كتب في المكتبة بعد'}
+                </span>
+              </div>
+            ) : searchMode === 'content' && contentResults.length === 0 && query.trim() ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-gray-500">
+                <FileText size={32} className="text-gray-600" />
+                <span className="text-sm">لم يتم العثور على &ldquo;{query.trim()}&rdquo; في محتويات الكتب</span>
+                <button
+                  onClick={() => handleModeSwitch('name')}
+                  className="text-emerald-400 text-xs hover:underline mt-1"
+                >
+                  جرّب البحث بالاسم بدلاً من ذلك
+                </button>
+              </div>
+            ) : null
           )}
         </div>
       </div>

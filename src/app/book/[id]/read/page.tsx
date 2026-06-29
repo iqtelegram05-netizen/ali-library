@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
+import CopyWithSourceWrapper from './CopyWithSourceWrapper';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ali-library.vercel.app';
 
@@ -540,18 +541,24 @@ export default async function BookReadPage({ params }: PageProps) {
               <h2 className="text-xl font-bold text-gray-100 mb-2">بداية الكتاب</h2>
               <p className="text-gray-500 text-xs">الصفحة الأولى من كتاب &ldquo;{book.name}&rdquo;</p>
             </div>
-            <div
-              className="px-6 sm:px-10 pb-8 sm:pb-10 pt-4 leading-loose text-base sm:text-lg whitespace-pre-wrap break-words rounded-b-2xl"
-              style={{
-                backgroundColor: '#111827',
-                color: '#e2e8f0',
-                fontFamily: '"Noto Kufi Arabic", "Amiri", "Traditional Arabic", serif',
-                lineHeight: '2.5',
-                direction: 'rtl',
-                textAlign: 'right',
-              }}
-              dangerouslySetInnerHTML={{ __html: firstPageContent }}
-            />
+            <CopyWithSourceWrapper
+              bookName={book.name}
+              bookId={book.id}
+              pageNumber={1}
+            >
+              <div
+                className="px-6 sm:px-10 pb-8 sm:pb-10 pt-4 leading-loose text-base sm:text-lg whitespace-pre-wrap break-words rounded-b-2xl"
+                style={{
+                  backgroundColor: '#111827',
+                  color: '#e2e8f0',
+                  fontFamily: '"Noto Kufi Arabic", "Amiri", "Traditional Arabic", serif',
+                  lineHeight: '2.5',
+                  direction: 'rtl',
+                  textAlign: 'right',
+                }}
+                dangerouslySetInnerHTML={{ __html: firstPageContent }}
+              />
+            </CopyWithSourceWrapper>
           </section>
         )}
 

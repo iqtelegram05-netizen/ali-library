@@ -35,14 +35,15 @@ function ReaderContent() {
 
   const bookUrl = searchParams.get('url') || '';
   const bookTitle = searchParams.get('title') || 'قارئ الكتب';
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
 
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [content, setContent] = useState<string>('');
   const [metadata, setMetadata] = useState<{ bookTitle: string; author: string; part: string; group: string } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [pageInput, setPageInput] = useState<string>('1');
+  const [pageInput, setPageInput] = useState<string>(String(initialPage));
   const [sepiaMode, setSepiaMode] = useState(false);
   const [showToc, setShowToc] = useState(false);
   const [toc, setToc] = useState<Array<{ num: number; title: string; page: number }>>([]);
